@@ -188,7 +188,7 @@ class Command(BaseCommand):
             schools.record([(lid, school.id, "tenants_school")])
             created += 1
 
-        for lid, name, contact, school_lid in self._rows(
+        for _lid, name, contact, school_lid in self._rows(
             legacy, "SELECT id, name, contact, school_id FROM main_shareholder"
         ):
             school_id = schools.get(school_lid)

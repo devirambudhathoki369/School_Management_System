@@ -6,10 +6,23 @@ from .models import Account, Role
 
 
 class AccountSerializer(serializers.ModelSerializer):
+    permissions = serializers.SerializerMethodField()
+
     class Meta:
         model = Account
-        fields = ["id", "username", "role", "email", "verified", "last_login"]
+        fields = ["id", "username", "role", "email", "verified", "last_login", "permissions"]
         read_only_fields = fields
+
+    def get_permissions(self, account) -> list[str]:
+        """Module permissions driving the UI; enforcement is server-side."""
+        if account.role == Role.ADMIN:
+            from apps.core.permissions import permission_codes
+
+            return permission_codes()
+        if account.role == Role.STAFF:
+            profile = getattr(account, "staff_profile", None)
+            return list(profile.permissions or []) if profile else []
+        return []
 
 
 class LoginSerializer(serializers.Serializer):

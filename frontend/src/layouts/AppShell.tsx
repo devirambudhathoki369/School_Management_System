@@ -1,15 +1,18 @@
 import { useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useAuth } from '../lib/auth'
 
 /**
  * Application frame, responsive by construction:
  *  - < lg: sidebar is an overlay drawer opened from the top bar; every
  *    tap target is at least 44px.
  *  - >= lg: sidebar is fixed and always visible; the drawer controls vanish.
- * New modules appear in navigation by adding one entry to NAV_SECTIONS.
+ * Navigation is permission-aware: an item renders only when the account
+ * holds one of its permission codes (admins hold all). Enforcement remains
+ * server-side — hiding is UX, not security.
  */
 
-type NavItem = { label: string; to: string; icon: string }
+type NavItem = { label: string; to: string; icon: string; needs?: string[] }
 type NavSection = { title: string; items: NavItem[] }
 
 const NAV_SECTIONS: NavSection[] = [
@@ -17,11 +20,27 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'Overview',
     items: [{ label: 'Dashboard', to: '/dashboard', icon: '▦' }],
   },
-  // Modules land here as they are built: Academics, People, Examinations,
+  {
+    title: 'People',
+    items: [
+      {
+        label: 'Students',
+        to: '/students',
+        icon: '◉',
+        needs: ['students.view', 'students.manage'],
+      },
+    ],
+  },
+  // Modules land here as they are built: Academics, Examinations,
   // Attendance, Billing, Accounting, Library, Transport, Communication.
 ]
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+  const { account } = useAuth()
+  const granted = new Set(account?.permissions ?? [])
+  const visible = (item: NavItem) =>
+    !item.needs || item.needs.some((code) => granted.has(code))
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-16 items-center gap-3 border-b border-border px-5">
@@ -35,30 +54,34 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4">
-        {NAV_SECTIONS.map((section) => (
-          <div key={section.title} className="mb-6">
-            <p className="px-2 pb-2 text-xs font-medium uppercase tracking-wide text-ink-faint">
-              {section.title}
-            </p>
-            {section.items.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                onClick={onNavigate}
-                className={({ isActive }) =>
-                  `flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-accent-soft text-accent-strong'
-                      : 'text-ink-muted hover:bg-surface-sunken hover:text-ink'
-                  }`
-                }
-              >
-                <span aria-hidden>{item.icon}</span>
-                {item.label}
-              </NavLink>
-            ))}
-          </div>
-        ))}
+        {NAV_SECTIONS.map((section) => {
+          const items = section.items.filter(visible)
+          if (items.length === 0) return null
+          return (
+            <div key={section.title} className="mb-6">
+              <p className="px-2 pb-2 text-xs font-medium uppercase tracking-wide text-ink-faint">
+                {section.title}
+              </p>
+              {items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  onClick={onNavigate}
+                  className={({ isActive }) =>
+                    `flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-accent-soft text-accent-strong'
+                        : 'text-ink-muted hover:bg-surface-sunken hover:text-ink'
+                    }`
+                  }
+                >
+                  <span aria-hidden>{item.icon}</span>
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+          )
+        })}
       </nav>
     </div>
   )
@@ -67,17 +90,22 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 export default function AppShell() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const location = useLocation()
+  const navigate = useNavigate()
+  const { account, logout } = useAuth()
   const title =
     NAV_SECTIONS.flatMap((s) => s.items).find((i) => i.to === location.pathname)?.label ?? ''
 
+  async function onLogout() {
+    await logout()
+    navigate('/login', { replace: true })
+  }
+
   return (
     <div className="flex h-full">
-      {/* Fixed sidebar (desktop) */}
       <aside className="hidden w-64 shrink-0 border-r border-border bg-surface lg:block">
         <SidebarContent />
       </aside>
 
-      {/* Drawer (mobile / tablet) */}
       {drawerOpen && (
         <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true">
           <button
@@ -101,6 +129,17 @@ export default function AppShell() {
             ☰
           </button>
           <h1 className="truncate text-base font-semibold sm:text-lg">{title}</h1>
+          <div className="ml-auto flex items-center gap-3">
+            <span className="hidden text-sm text-ink-muted sm:block">
+              {account?.username} · {account?.role.replace('_', ' ')}
+            </span>
+            <button
+              onClick={onLogout}
+              className="flex min-h-10 items-center rounded-lg border border-border px-3 text-sm font-medium text-ink-muted hover:bg-surface-sunken"
+            >
+              Sign out
+            </button>
+          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">

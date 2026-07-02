@@ -65,6 +65,16 @@ class StaffSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(read_only=True)
     role_name = serializers.CharField(source="role.name", read_only=True)
 
+    def validate_permissions(self, value):
+        from apps.core.permissions import permission_codes
+
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Must be a list of permission codes.")
+        unknown = set(value) - set(permission_codes())
+        if unknown:
+            raise serializers.ValidationError(f"Unknown permission codes: {sorted(unknown)}")
+        return value
+
     class Meta:
         model = Staff
         fields = [

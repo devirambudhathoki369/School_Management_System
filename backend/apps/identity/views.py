@@ -1,9 +1,12 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.generics import GenericAPIView, RetrieveAPIView
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
+from rest_framework.views import APIView
+
+from apps.core.permissions import PERMISSION_MODULES
 
 from .serializers import AccountSerializer, LoginSerializer
 
@@ -32,6 +35,25 @@ class LoginView(GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class PermissionCatalogView(APIView):
+    """Grantable module permissions — renders the admin's permission UI."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Permission catalog")
+    def get(self, request):
+        return Response({
+            "modules": [
+                {
+                    "code": code,
+                    "label": label,
+                    "permissions": [f"{code}.view", f"{code}.manage"],
+                }
+                for code, label in PERMISSION_MODULES.items()
+            ]
+        })
 
 
 class MeView(RetrieveAPIView):

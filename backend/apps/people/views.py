@@ -20,6 +20,7 @@ MANAGERS = (Role.ADMIN, Role.STAFF)
 class StudentViewSet(TenantScopedViewSet):
     queryset = Student.objects.select_related("class_info__section", "class_info__course")
     allowed_roles = MANAGERS
+    permission_code = "students"
 
     def get_serializer_class(self):
         return StudentListSerializer if self.action == "list" else StudentDetailSerializer
@@ -47,12 +48,14 @@ class GuardianViewSet(TenantScopedViewSet):
     queryset = Guardian.objects.all()
     serializer_class = GuardianSerializer
     allowed_roles = MANAGERS
+    permission_code = "students"
 
 
 class StaffViewSet(TenantScopedViewSet):
     queryset = Staff.objects.select_related("role")
     serializer_class = StaffSerializer
     allowed_roles = (Role.ADMIN,)  # staff records are admin-managed
+    permission_code = "staff"
 
     def get_queryset(self):
         qs = super().get_queryset()

@@ -12,13 +12,14 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.core.permissions import RoleAllowed
+from apps.core.permissions import ModulePermissionAllowed, RoleAllowed
 from apps.tenants.services import resolve_school_for
 
 
 class TenantScopedViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated, RoleAllowed]
+    permission_classes = [IsAuthenticated, RoleAllowed, ModulePermissionAllowed]
     allowed_roles: tuple[str, ...] = ()  # subclasses MUST declare (fail closed)
+    permission_code: str = ""            # subclasses MUST declare (fail closed)
 
     def initial(self, request, *args, **kwargs):
         super().initial(request, *args, **kwargs)

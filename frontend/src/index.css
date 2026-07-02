@@ -17,9 +17,10 @@
   --color-ink-muted: #64748b;
   --color-ink-faint: #94a3b8;
 
-  --color-accent: #4f46e5;
-  --color-accent-strong: #4338ca;
-  --color-accent-soft: #eef2ff;
+  /* Brand accent: light bluish (per product owner) */
+  --color-accent: #38bdf8;
+  --color-accent-strong: #0284c7;
+  --color-accent-soft: #e0f2fe;
 
   --color-positive: #059669;
   --color-warning: #d97706;
