@@ -48,6 +48,8 @@ LOCAL_APPS = [
     "apps.academics",
     "apps.people",
     "apps.examinations",
+    "apps.attendance",
+    "apps.devices",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -215,6 +217,9 @@ MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
+
+# Optional shared secret ZKTeco devices append as ?pushcommkey= on /iclock/*.
+DEVICE_PUSH_COMM_KEY = env("DEVICE_PUSH_COMM_KEY", default="")
 
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"

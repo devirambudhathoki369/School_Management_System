@@ -117,7 +117,10 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument(
             "--phase",
-            choices=["all", "tenants", "academics", "people", "examinations"],
+            choices=[
+                "all", "tenants", "academics", "people", "examinations",
+                "attendance", "devices",
+            ],
             default="all",
         )
         parser.add_argument(
@@ -146,6 +149,12 @@ class Command(BaseCommand):
                     self.import_examinations(legacy)
                 with transaction.atomic():
                     self.import_student_results(legacy)
+            if phase in ("all", "attendance"):
+                with transaction.atomic():
+                    self.import_attendance(legacy)
+            if phase in ("all", "devices"):
+                with transaction.atomic():
+                    self.import_devices(legacy)
         self.stdout.write(self.style.SUCCESS("Import finished."))
 
     # ------------------------------------------------------------------
@@ -194,15 +203,18 @@ class Command(BaseCommand):
                 pan_no=pan_no or "", estd_date_bs=estd or "", is_test=is_test,
                 is_active=active, admin_account=account, legacy_id=lid,
             )
-            SchoolSettings.objects.create(
-                school=school, uses_sms=uses_sms, uses_mobile_app=uses_app,
-                time_set_required=time_set, attendance_in_time=in_time,
-                attendance_out_time=out_time,
-                hidden_education_levels=[x for x in hidden_levels.get(lid, []) if x],
-            )
-            SchoolBranding.objects.create(
-                school=school, slogan=slogan or "", about_us=about_us or ""
-            )
+            # The tenants post_save signal pre-creates empty satellites.
+            SchoolSettings.objects.update_or_create(school=school, defaults={
+                "uses_sms": uses_sms, "uses_mobile_app": uses_app,
+                "time_set_required": time_set, "attendance_in_time": in_time,
+                "attendance_out_time": out_time,
+                "hidden_education_levels": [
+                    x for x in hidden_levels.get(lid, []) if x
+                ],
+            })
+            SchoolBranding.objects.update_or_create(school=school, defaults={
+                "slogan": slogan or "", "about_us": about_us or "",
+            })
             schools.record([(lid, school.id, "tenants_school")])
             created += 1
 
@@ -857,6 +869,190 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(f"  skipped {skipped} unmapped rows"))
 
     # ------------------------------------------------------------------
+    # Phase 5: attendance (443 duplicate legacy sessions merge, latest wins)
+    # ------------------------------------------------------------------
+
+    def import_attendance(self, legacy):
+        from apps.attendance.models import (
+            ClassAttendanceSession,
+            StaffAttendanceRecord,
+            StudentAttendanceRecord,
+        )
+
+        schools = IdMap("main_schooladmin")
+        classes = IdMap("main_classinfo")
+        students = IdMap("main_student")
+        staff = IdMap("main_staff")
+        sessions = IdMap("main_classattendance")
+
+        # Class sessions: dedupe (school, class, date), latest id wins.
+        latest, lids_by_key = {}, {}
+        for lid, date_bs, class_lid, school_lid, teacher_lid in self._rows(
+            legacy,
+            "SELECT id, date, class_info_id, school_id, teacher_id"
+            " FROM main_classattendance WHERE is_active ORDER BY id",
+        ):
+            if lid in sessions or school_lid not in schools or class_lid not in classes:
+                continue
+            key = (schools[school_lid], classes[class_lid], date_bs)
+            latest[key] = (lid, teacher_lid)
+            lids_by_key.setdefault(key, []).append(lid)
+
+        rows = [
+            ClassAttendanceSession(
+                school_id=school_id, class_info_id=class_id, date_bs=date_bs,
+                teacher_id=staff.get(teacher_lid), legacy_id=lid,
+            )
+            for (school_id, class_id, date_bs), (lid, teacher_lid) in latest.items()
+        ]
+        ClassAttendanceSession.objects.bulk_create(rows, batch_size=BATCH)
+        by_key = {(o.school_id, o.class_info_id, o.date_bs): o.id for o in rows}
+        sessions.record([
+            (lid, by_key[key], "attendance_classattendancesession")
+            for key, lids in lids_by_key.items()
+            for lid in lids
+        ])
+        merged = sum(len(lids) - 1 for lids in lids_by_key.values())
+        self._report("class sessions", len(rows), ClassAttendanceSession)
+        if merged:
+            self.stdout.write(self.style.WARNING(f"  merged {merged} duplicate sessions"))
+
+        # Student records: unique (session, student); collisions only via
+        # merged sessions — arbitrated by highest legacy id.
+        if not StudentAttendanceRecord.all_objects.exists():
+            best: dict[tuple, tuple] = {}
+            with legacy.cursor(name="studentattd") as cur:
+                cur.itersize = 20000
+                cur.execute(
+                    "SELECT id, status, reason, class_attendance_id, student_id,"
+                    " checked_in_at, checked_out_at FROM main_studentattendance"
+                    " WHERE is_active ORDER BY id"
+                )
+                for lid, present, reason, session_lid, student_lid, cin, cout in cur:
+                    session_id = sessions.get(session_lid)
+                    student_id = students.get(student_lid)
+                    if not (session_id and student_id):
+                        continue
+                    best[(session_id, student_id)] = (lid, present, reason or "", cin, cout)
+            StudentAttendanceRecord.objects.bulk_create(
+                [
+                    StudentAttendanceRecord(
+                        session_id=session_id, student_id=student_id, present=present,
+                        reason=reason, checked_in_at=cin, checked_out_at=cout,
+                    )
+                    for (session_id, student_id), (lid, present, reason, cin, cout)
+                    in best.items()
+                ],
+                batch_size=BATCH,
+            )
+            self._report("student records", len(best), StudentAttendanceRecord)
+
+        # Staff records: unique (staff, date) — clean in legacy, but keep
+        # latest-wins for safety.
+        if not StaffAttendanceRecord.all_objects.exists():
+            best = {}
+            for lid, date_bs, present, reason, school_lid, staff_lid, cin, cout in self._rows(
+                legacy,
+                "SELECT id, date, status, reason, school_id, staff_id,"
+                " checked_in_at, checked_out_at FROM main_staffattendance"
+                " WHERE is_active ORDER BY id",
+            ):
+                staff_id = staff.get(staff_lid)
+                if staff_id and school_lid in schools:
+                    best[(staff_id, date_bs)] = (
+                        lid, schools[school_lid], present, reason or "", cin, cout
+                    )
+            StaffAttendanceRecord.objects.bulk_create(
+                [
+                    StaffAttendanceRecord(
+                        staff_id=staff_id, date_bs=date_bs, school_id=school_id,
+                        present=present, reason=reason,
+                        checked_in_at=cin, checked_out_at=cout, legacy_id=lid,
+                    )
+                    for (staff_id, date_bs), (lid, school_id, present, reason, cin, cout)
+                    in best.items()
+                ],
+                batch_size=BATCH,
+            )
+            self._report("staff records", len(best), StaffAttendanceRecord)
+
+    # ------------------------------------------------------------------
+    # Phase 6: RFID devices, device users, punch logs
+    # ------------------------------------------------------------------
+
+    def import_devices(self, legacy):
+        from apps.devices.models import Device, DeviceUser, PunchLog
+
+        schools = IdMap("main_schooladmin")
+        students = IdMap("main_student")
+        staff = IdMap("main_staff")
+        devices = IdMap("rfid_device")
+        device_users = IdMap("rfid_rfidattduser")
+
+        for (lid, serial, alias, ip, firmware, pushver, dtype, key, tz_min,
+             realtime, last_seen, a_stamp, o_stamp, p_stamp, users, fps, faces,
+             trans, school_lid) in self._rows(
+            legacy,
+            "SELECT id, serial_number, alias, ip_address, firmware, push_version,"
+            " device_type, push_comm_key, timezone_min, real_time, last_seen,"
+            " attlog_stamp, operlog_stamp, photo_stamp, user_count, fp_count,"
+            " face_count, trans_count, school_id FROM rfid_device ORDER BY id",
+        ):
+            if lid in devices or school_lid not in schools:
+                continue
+            device = Device.objects.create(
+                school_id=schools[school_lid], serial_number=serial,
+                alias=alias or "", ip_address=str(ip) if ip else None,
+                firmware=firmware or "", push_version=pushver or "",
+                device_type=dtype or "", push_comm_key=key or "",
+                timezone_min=tz_min, real_time=realtime, last_seen=last_seen,
+                attlog_stamp=a_stamp or "None", operlog_stamp=o_stamp or "None",
+                photo_stamp=p_stamp or "None", user_count=users, fp_count=fps,
+                face_count=faces, trans_count=trans,
+                state=Device.State.REGISTERED, legacy_id=lid,
+            )
+            devices.record([(lid, device.id, "devices_device")])
+        self._report("devices", len(devices.map), Device)
+
+        device_school = dict(Device.all_objects.values_list("id", "school_id"))
+        new_rows = []
+        for (lid, active, pin, privilege, password, card, group_id, tz_str,
+             verify, device_lid, staff_lid, student_lid) in self._rows(
+            legacy,
+            "SELECT id, is_active, pin, privilege, password, card, group_id,"
+            " tz_str, verify, device_id, staff_id, student_id"
+            " FROM rfid_rfidattduser ORDER BY id",
+        ):
+            device_id = devices.get(device_lid)
+            if lid in device_users or not device_id:
+                continue
+            new_rows.append(DeviceUser(
+                school_id=device_school[device_id], device_id=device_id,
+                pin=pin, privilege=privilege, password=password or "",
+                card=card or "", group_id=group_id, tz_str=tz_str or "",
+                verify=verify, student_id=students.get(student_lid),
+                staff_id=staff.get(staff_lid), is_active=active, legacy_id=lid,
+            ))
+        DeviceUser.objects.bulk_create(new_rows, batch_size=BATCH)
+        device_users.record([(o.legacy_id, o.id, "devices_deviceuser") for o in new_rows])
+        self._report("device users", len(new_rows), DeviceUser)
+
+        if not PunchLog.objects.exists():
+            punch_rows = []
+            for lid, punch_time, status, verify, workcode, received, user_lid in self._rows(
+                legacy,
+                "SELECT id, punch_time, status, verify, workcode, received_at,"
+                " user_id FROM rfid_rfidattdlogs ORDER BY id",
+            ):
+                punch_rows.append(PunchLog(
+                    user_id=device_users.get(user_lid), punch_time=punch_time,
+                    status=status, verify=verify, workcode=workcode,
+                    legacy_id=lid,
+                ))
+            PunchLog.objects.bulk_create(punch_rows, batch_size=BATCH)
+            self._report("punch logs", len(punch_rows), PunchLog)
+
+    # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
@@ -874,7 +1070,7 @@ class Command(BaseCommand):
         return base
 
     def _report(self, phase: str, created: int, model):
-        total = model.all_objects.count()
+        manager = getattr(model, "all_objects", model.objects)
         self.stdout.write(
-            self.style.SUCCESS(f"[{phase}] created {created}; total {total}")
+            self.style.SUCCESS(f"[{phase}] created {created}; total {manager.count()}")
         )
