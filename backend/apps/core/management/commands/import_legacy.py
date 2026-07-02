@@ -30,6 +30,17 @@ from apps.academics.models import (
     Subject,
 )
 from apps.core.models import LegacyMap
+from apps.examinations.models import (
+    ActivityDefinition,
+    ActivityGrade,
+    CharacterCertificate,
+    Exam,
+    ExamScheduleEntry,
+    GradeBand,
+    GradingScheme,
+    StudentSubjectResult,
+    SubjectResultSheet,
+)
 from apps.identity.models import Account, Role
 from apps.people.models import Guardian, Staff, StaffRole, Student, StudentGuardian
 from apps.tenants.models import School, SchoolBranding, SchoolSettings, Shareholder
@@ -105,7 +116,9 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "--phase", choices=["all", "tenants", "academics", "people"], default="all"
+            "--phase",
+            choices=["all", "tenants", "academics", "people", "examinations"],
+            default="all",
         )
         parser.add_argument(
             "--legacy-dsn",
@@ -128,6 +141,11 @@ class Command(BaseCommand):
                     self.import_staff(legacy)
                 with transaction.atomic():
                     self.import_students(legacy)
+            if phase in ("all", "examinations"):
+                with transaction.atomic():
+                    self.import_examinations(legacy)
+                with transaction.atomic():
+                    self.import_student_results(legacy)
         self.stdout.write(self.style.SUCCESS("Import finished."))
 
     # ------------------------------------------------------------------
@@ -557,6 +575,286 @@ class Command(BaseCommand):
             ],
             batch_size=BATCH,
         )
+
+    # ------------------------------------------------------------------
+    # Phase 4a: examinations (exams, schedules, grading, sheets, extras)
+    # ------------------------------------------------------------------
+
+    def import_examinations(self, legacy):
+        schools = IdMap("main_schooladmin")
+        years = IdMap("main_academicyear")
+        classes = IdMap("main_classinfo")
+        subjects = IdMap("main_subject")
+        students = IdMap("main_student")
+        exams = IdMap("main_exam")
+        sheets = IdMap("main_classresult")
+
+        def dec(value):
+            return None if value in (None, "") else value
+
+        # Exams
+        new_rows = []
+        for lid, name, inclusion, ay_lid, school_lid, attd in self._rows(
+            legacy,
+            "SELECT id, name, inclusion, academic_year_id, school_id,"
+            " attendance_inclusion FROM main_exam ORDER BY id",
+        ):
+            if lid in exams or school_lid not in schools or ay_lid not in years:
+                continue
+            new_rows.append(Exam(
+                school_id=schools[school_lid], academic_year_id=years[ay_lid],
+                name=name, inclusion_weight=inclusion, include_attendance=attd,
+                legacy_id=lid,
+            ))
+        Exam.objects.bulk_create(new_rows, batch_size=BATCH)
+        exams.record([(o.legacy_id, o.id, "examinations_exam") for o in new_rows])
+        self._report("exams", len(new_rows), Exam)
+
+        # Schedule entries: explode {subject_lid: date_bs}; last wins per sitting
+        if not ExamScheduleEntry.all_objects.exists():
+            sittings = {}
+            for exam_lid, class_lid, start, end, schedule in self._rows(
+                legacy,
+                "SELECT exam_id, class_info_id, start_time, end_time, schedule"
+                " FROM main_examschedule ORDER BY id",
+            ):
+                if exam_lid not in exams or class_lid not in classes:
+                    continue
+                for subject_lid, date_bs in (schedule or {}).items():
+                    subject_id = subjects.get(int(subject_lid))
+                    if subject_id:
+                        key = (exams[exam_lid], classes[class_lid], subject_id)
+                        sittings[key] = (str(date_bs)[:10], start or "", end or "")
+            exam_school = dict(Exam.all_objects.values_list("id", "school_id"))
+            ExamScheduleEntry.objects.bulk_create(
+                [
+                    ExamScheduleEntry(
+                        school_id=exam_school[exam_id], exam_id=exam_id,
+                        class_info_id=class_id, subject_id=subject_id,
+                        exam_date_bs=date_bs, start_time=start, end_time=end,
+                    )
+                    for (exam_id, class_id, subject_id), (date_bs, start, end)
+                    in sittings.items()
+                ],
+                batch_size=BATCH,
+            )
+            self._report("schedule", len(sittings), ExamScheduleEntry)
+
+        # Grading schemes: dedupe (school, type), latest id wins
+        if not GradingScheme.all_objects.exists():
+            type_map = {1: "number", 2: "grading", 4: "division"}
+            latest = {}
+            for _lid, rtype, rules, school_lid in self._rows(
+                legacy,
+                "SELECT id, type, rules, school_id FROM main_gradingrules"
+                " WHERE is_active ORDER BY id",
+            ):
+                if school_lid in schools and rtype in type_map:
+                    latest[(schools[school_lid], type_map[rtype])] = rules or []
+            for (school_id, rtype), rules in latest.items():
+                scheme = GradingScheme.objects.create(school_id=school_id, type=rtype)
+                GradeBand.objects.bulk_create([
+                    GradeBand(
+                        scheme=scheme, school_id=school_id,
+                        min_score=band.get("min") or 0, max_score=band.get("max") or 0,
+                        remarks=str(band.get("remarks") or "")[:60],
+                    )
+                    for band in rules
+                    if isinstance(band, dict)
+                ])
+            self._report("grading schemes", len(latest), GradingScheme)
+
+        # Result sheets: dedupe (exam, class, subject) with latest-id-wins;
+        # every legacy id (winners AND superseded duplicates) maps to the one
+        # surviving sheet so student results can be remapped onto it.
+        exam_school = dict(Exam.all_objects.values_list("id", "school_id"))
+        latest_sheet: dict[tuple, tuple] = {}
+        lids_by_key: dict[tuple, list[int]] = {}
+        for lid, criteria, published, class_lid, subject_lid, exam_lid in self._rows(
+            legacy,
+            "SELECT id, criteria, published_date, class_info_id, subject_id, exam_id"
+            " FROM main_classresult ORDER BY id",
+        ):
+            if lid in sheets:
+                continue
+            if (
+                exam_lid not in exams
+                or class_lid not in classes
+                or subject_lid not in subjects
+            ):
+                continue
+            key = (exams[exam_lid], classes[class_lid], subjects[subject_lid])
+            latest_sheet[key] = (lid, criteria, published)
+            lids_by_key.setdefault(key, []).append(lid)
+
+        sheet_rows = []
+        for (exam_id, class_id, subject_id), (lid, criteria, published) in latest_sheet.items():
+            criteria = criteria or {}
+            attendance = criteria.get("attendance")
+            try:
+                attendance = int(attendance) if attendance not in (None, "") else None
+            except (TypeError, ValueError):
+                attendance = None
+            sheet_rows.append(SubjectResultSheet(
+                school_id=exam_school[exam_id],
+                exam_id=exam_id, class_info_id=class_id, subject_id=subject_id,
+                full_marks=dec(criteria.get("fm")) or 0,
+                pass_marks=dec(criteria.get("pm")) or 0,
+                full_marks_theory=dec(criteria.get("fm_th")),
+                pass_marks_theory=dec(criteria.get("pm_th")),
+                full_marks_practical=dec(criteria.get("fm_pr")),
+                pass_marks_practical=dec(criteria.get("pm_pr")),
+                attendance_days=attendance,
+                published_date_bs=(published or "")[:10],
+                legacy_id=lid,
+            ))
+        SubjectResultSheet.objects.bulk_create(sheet_rows, batch_size=BATCH)
+        by_key = {(o.exam_id, o.class_info_id, o.subject_id): o.id for o in sheet_rows}
+        map_pairs, merged = [], 0
+        for key, lids in lids_by_key.items():
+            for lid in lids:
+                map_pairs.append((lid, by_key[key], "examinations_subjectresultsheet"))
+            merged += len(lids) - 1
+        sheets.record(map_pairs)
+        self._report("result sheets", len(sheet_rows), SubjectResultSheet)
+        if merged:
+            self.stdout.write(self.style.WARNING(
+                f"  merged {merged} duplicate legacy sheets"
+            ))
+
+        # Extra activities + entries, certificates
+        if not ActivityDefinition.all_objects.exists():
+            activity_map = {}
+            for lid, name, school_lid in self._rows(
+                legacy, "SELECT id, name, school_id FROM main_extraactivity ORDER BY id"
+            ):
+                if school_lid in schools:
+                    row = ActivityDefinition.objects.create(
+                        school_id=schools[school_lid], name=name, legacy_id=lid
+                    )
+                    activity_map[lid] = row.id
+            latest_entries = {}
+            for exam_lid, class_lid, student_lid, entries, school_lid in self._rows(
+                legacy,
+                "SELECT exam_id, class_info_id, student_id, extra_activities, school_id"
+                " FROM main_extraactivityentry ORDER BY id",
+            ):
+                if (
+                    exam_lid in exams and class_lid in classes
+                    and student_lid in students and school_lid in schools
+                ):
+                    latest_entries[(exams[exam_lid], students[student_lid])] = (
+                        classes[class_lid], schools[school_lid], entries or {}
+                    )
+            grade_rows = []
+            for (exam_id, student_id), (class_id, school_id, entries) in latest_entries.items():
+                for activity_lid, grade in entries.items():
+                    activity_id = activity_map.get(int(activity_lid))
+                    if activity_id:
+                        grade_rows.append(ActivityGrade(
+                            school_id=school_id, exam_id=exam_id, class_info_id=class_id,
+                            student_id=student_id, activity_id=activity_id,
+                            grade=str(grade)[:20],
+                        ))
+            ActivityGrade.objects.bulk_create(grade_rows, batch_size=BATCH)
+            self._report("activity grades", len(grade_rows), ActivityGrade)
+
+        certs = IdMap("main_charactercertificate")
+        cert_rows = []
+        for lid, data, school_lid, student_lid, serial in self._rows(
+            legacy,
+            "SELECT id, data, school_id, student_id, serial_no"
+            " FROM main_charactercertificate ORDER BY id",
+        ):
+            if lid in certs or school_lid not in schools:
+                continue
+            cert_rows.append(CharacterCertificate(
+                school_id=schools[school_lid], student_id=students.get(student_lid),
+                serial_no=str(serial)[:40], data=data or {}, legacy_id=lid,
+            ))
+        CharacterCertificate.objects.bulk_create(cert_rows, batch_size=BATCH)
+        certs.record(
+            [(o.legacy_id, o.id, "examinations_charactercertificate") for o in cert_rows]
+        )
+        self._report("certificates", len(cert_rows), CharacterCertificate)
+
+    # ------------------------------------------------------------------
+    # Phase 4b: student results (2.47M rows; dedupe latest-entry-wins)
+    # ------------------------------------------------------------------
+
+    def import_student_results(self, legacy):
+        """
+        Legacy re-created result rows on every save (446k duplicate
+        (sheet, student) pairs in production). DISTINCT ON in the legacy DB
+        keeps only the latest row per legacy pair; pairs that can still
+        collide because duplicate sheets were merged (the alias sheets) are
+        buffered and arbitrated in Python by highest legacy id.
+        """
+        sheets = IdMap("main_classresult")
+        students = IdMap("main_student")
+        sheet_school = dict(SubjectResultSheet.all_objects.values_list("id", "school_id"))
+        done_sheets = set(
+            StudentSubjectResult.all_objects.values_list("sheet_id", flat=True).distinct()
+        )
+
+        # New sheet ids fed by more than one legacy sheet (cross-group collisions)
+        alias_counts: dict = {}
+        for new_id in sheets.map.values():
+            alias_counts[new_id] = alias_counts.get(new_id, 0) + 1
+        alias_sheets = {new_id for new_id, n in alias_counts.items() if n > 1}
+
+        total_created = skipped = 0
+        batch: list[StudentSubjectResult] = []
+        buffered: dict[tuple, StudentSubjectResult] = {}
+
+        def make_row(sheet_id, student_id, values) -> StudentSubjectResult:
+            (lid, theory, practical, total, inclusion, passed, absent,
+             attendance, pos_class, pos_section) = values
+            return StudentSubjectResult(
+                school_id=sheet_school[sheet_id], sheet_id=sheet_id,
+                student_id=student_id, theory=theory, practical=practical,
+                total=total or 0, inclusion=inclusion, attendance_days=attendance,
+                passed=passed, absent=bool(absent),
+                position_in_section=pos_section, position_in_class=pos_class,
+                legacy_id=lid,
+            )
+
+        with legacy.cursor(name="studentresults") as cur:  # server-side cursor
+            cur.itersize = 20000
+            cur.execute(
+                "SELECT DISTINCT ON (class_result_id, student_id)"
+                " id, theory, practical, total, inclusion, result, absent,"
+                " attendance, position_in_class, position_in_section,"
+                " class_result_id, student_id"
+                " FROM main_studentresult"
+                " ORDER BY class_result_id, student_id, id DESC"
+            )
+            for row in cur:
+                values, sheet_lid, student_lid = row[:10], row[10], row[11]
+                sheet_id = sheets.get(sheet_lid)
+                student_id = students.get(student_lid)
+                if not (sheet_id and student_id) or sheet_id in done_sheets:
+                    skipped += 1
+                    continue
+                if sheet_id in alias_sheets:
+                    key = (sheet_id, student_id)
+                    current = buffered.get(key)
+                    if current is None or values[0] > current.legacy_id:
+                        buffered[key] = make_row(sheet_id, student_id, values)
+                    continue
+                batch.append(make_row(sheet_id, student_id, values))
+                if len(batch) >= BATCH:
+                    StudentSubjectResult.objects.bulk_create(batch)
+                    total_created += len(batch)
+                    batch = []
+
+        batch.extend(buffered.values())
+        StudentSubjectResult.objects.bulk_create(batch, batch_size=BATCH)
+        total_created += len(batch)
+
+        self._report("student results", total_created, StudentSubjectResult)
+        if skipped:
+            self.stdout.write(self.style.WARNING(f"  skipped {skipped} unmapped rows"))
 
     # ------------------------------------------------------------------
     # Helpers
