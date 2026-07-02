@@ -1,0 +1,21 @@
+# Development services. The Django/Vite dev servers run natively; this file
+# provides the stateful dependencies with production-matching versions.
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: erp
+      POSTGRES_PASSWORD: erp
+      POSTGRES_DB: school_erp
+    ports:
+      - "5434:5432" # 5433 is the native dev cluster; compose uses 5434
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:

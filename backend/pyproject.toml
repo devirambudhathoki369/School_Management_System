@@ -1,0 +1,41 @@
+[project]
+name = "school-erp-backend"
+version = "0.1.0"
+description = "Multi-tenant School ERP platform — backend"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=5.2,<6.0",
+    "djangorestframework>=3.16",
+    "djangorestframework-simplejwt>=5.5",
+    "drf-spectacular>=0.28",
+    "psycopg[binary]>=3.2",
+    "argon2-cffi>=23.1",
+    "django-environ>=0.12",
+    "django-cors-headers>=4.7",
+    "celery[redis]>=5.5",
+    "django-redis>=6.0",
+    "gunicorn>=23.0",
+    "pillow>=12.3.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.12",
+    "pytest>=8.3",
+    "pytest-django>=4.11",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "DJ", "S", "UP"]
+ignore = ["S101"]  # asserts are fine in tests
+
+[tool.ruff.lint.per-file-ignores]
+"**/migrations/*" = ["E501"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.dev"
+python_files = ["test_*.py"]
