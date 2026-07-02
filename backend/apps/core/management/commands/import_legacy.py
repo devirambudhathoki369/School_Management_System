@@ -119,7 +119,7 @@ class Command(BaseCommand):
             "--phase",
             choices=[
                 "all", "tenants", "academics", "people", "examinations",
-                "attendance", "devices",
+                "attendance", "devices", "billing",
             ],
             default="all",
         )
@@ -155,6 +155,13 @@ class Command(BaseCommand):
             if phase in ("all", "devices"):
                 with transaction.atomic():
                     self.import_devices(legacy)
+            if phase in ("all", "billing"):
+                with transaction.atomic():
+                    self.import_billing_structure(legacy)
+                with transaction.atomic():
+                    self.import_charges(legacy)
+                with transaction.atomic():
+                    self.import_payments(legacy)
         self.stdout.write(self.style.SUCCESS("Import finished."))
 
     # ------------------------------------------------------------------
@@ -1051,6 +1058,328 @@ class Command(BaseCommand):
                 ))
             PunchLog.objects.bulk_create(punch_rows, batch_size=BATCH)
             self._report("punch logs", len(punch_rows), PunchLog)
+
+    # ------------------------------------------------------------------
+    # Phase 7: billing (JSON details -> explicit line rows)
+    # ------------------------------------------------------------------
+
+    RESERVED_LINES = {
+        "tn": ("transport", "Transportation"),
+        "od": ("old_dues", "Old dues"),
+        "ob": ("opening_balance", "Opening balance"),
+        "discounts": ("discount", "Discount"),
+        "lib_fine": ("library_fine", "Library fine"),
+        "cfo": ("carry_forward_out", "Carry forward out"),
+        "": ("other", "Other"),
+    }
+
+    def _line_meta(self, key, titles, title_map):
+        """(line_type, fee_title_new_id, label) for one legacy details key."""
+        if key in self.RESERVED_LINES:
+            line_type, label = self.RESERVED_LINES[key]
+            return line_type, None, label
+        label = str(titles.get(key) or key)[:60]  # M4: prefer the snapshot
+        try:
+            title_id = title_map.get(int(key))
+        except (TypeError, ValueError):
+            title_id = None
+        return "fee", title_id, label
+
+    def import_billing_structure(self, legacy):
+        from apps.billing.models import (
+            BillingYear,
+            ChargeBatch,
+            FeeSchedule,
+            FeeTitle,
+            StandingDiscount,
+        )
+
+        schools = IdMap("main_schooladmin")
+        years = IdMap("main_academicyear")
+        classes = IdMap("main_classinfo")
+        students = IdMap("main_student")
+        billing_years = IdMap("main_economicyear")
+        titles = IdMap("main_feetitle")
+        fees = IdMap("main_fee")
+        discounts = IdMap("main_studentdiscountinfo")
+        batches = IdMap("main_ledgerposting")
+
+        for lid, name, start, end, closed, remarks in self._rows(
+            legacy,
+            "SELECT id, name, start_date, end_date, closed, remarks"
+            " FROM main_economicyear ORDER BY id",
+        ):
+            if lid in billing_years:
+                continue
+            row = BillingYear.objects.create(
+                name=name, start_date_bs=start or "", end_date_bs=end or "",
+                closed=closed, remarks=remarks or "", legacy_id=lid,
+            )
+            billing_years.record([(lid, row.id, "billing_billingyear")])
+        self._report("billing years", len(billing_years.map), BillingYear)
+
+        new_rows = []
+        for lid, name, months, school_lid, is_cash in self._rows(
+            legacy,
+            'SELECT id, title, months, school_id, "isCashReceipt"'
+            " FROM main_feetitle ORDER BY id",
+        ):
+            if lid in titles or school_lid not in schools:
+                continue
+            new_rows.append(FeeTitle(
+                school_id=schools[school_lid], name=name[:60],
+                months=[m for m in (months or []) if isinstance(m, int)],
+                kind="cash_receipt" if is_cash else "regular", legacy_id=lid,
+            ))
+        FeeTitle.objects.bulk_create(new_rows, batch_size=BATCH)
+        titles.record([(o.legacy_id, o.id, "billing_feetitle") for o in new_rows])
+        self._report("fee titles", len(new_rows), FeeTitle)
+
+        title_school = dict(FeeTitle.all_objects.values_list("id", "school_id"))
+        new_rows = []
+        for lid, amount, class_lid, title_lid in self._rows(
+            legacy,
+            "SELECT id, fee, class_info_id, title_id FROM main_fee"
+            " WHERE is_active ORDER BY id",
+        ):
+            title_id = titles.get(title_lid)
+            class_id = classes.get(class_lid)
+            if lid in fees or not (title_id and class_id):
+                continue
+            new_rows.append(FeeSchedule(
+                school_id=title_school[title_id], class_info_id=class_id,
+                fee_title_id=title_id, amount=amount, legacy_id=lid,
+            ))
+        FeeSchedule.objects.bulk_create(new_rows, batch_size=BATCH)
+        fees.record([(o.legacy_id, o.id, "billing_feeschedule") for o in new_rows])
+        self._report("fee schedules", len(new_rows), FeeSchedule)
+
+        new_rows = []
+        for lid, flat, school_lid, student_lid, title_lid, remarks, pct, ay_lid in self._rows(
+            legacy,
+            "SELECT id, discount, school_id, student_id, title_id, remarks,"
+            " percentage, academic_year_id FROM main_studentdiscountinfo"
+            " WHERE is_active ORDER BY id",
+        ):
+            student_id = students.get(student_lid)
+            if lid in discounts or school_lid not in schools or not student_id:
+                continue
+            new_rows.append(StandingDiscount(
+                school_id=schools[school_lid], student_id=student_id,
+                fee_title_id=titles.get(title_lid), flat_amount=flat,
+                percentage=pct, academic_year_id=years.get(ay_lid),
+                remarks=remarks or "", legacy_id=lid,
+            ))
+        StandingDiscount.objects.bulk_create(new_rows, batch_size=BATCH)
+        discounts.record([(o.legacy_id, o.id, "billing_standingdiscount") for o in new_rows])
+        self._report("discounts", len(new_rows), StandingDiscount)
+
+        class_school = dict(ClassInfo.all_objects.values_list("id", "school_id"))
+        new_rows = []
+        for lid, date_bs, months, ay_lid, class_lid, ey_lid, remarks in self._rows(
+            legacy,
+            "SELECT id, date, months, academic_year_id, class_info_id,"
+            " economic_year_id, remarks FROM main_ledgerposting ORDER BY id",
+        ):
+            class_id = classes.get(class_lid)
+            ay_id, ey_id = years.get(ay_lid), billing_years.get(ey_lid)
+            if lid in batches or not (class_id and ay_id and ey_id):
+                continue
+            new_rows.append(ChargeBatch(
+                school_id=class_school[class_id], date_bs=date_bs or "",
+                months=[m for m in (months or []) if isinstance(m, int)],
+                academic_year_id=ay_id, billing_year_id=ey_id,
+                class_info_id=class_id, remarks=remarks or "", legacy_id=lid,
+            ))
+        ChargeBatch.objects.bulk_create(new_rows, batch_size=BATCH)
+        batches.record([(o.legacy_id, o.id, "billing_chargebatch") for o in new_rows])
+        self._report("charge batches", len(new_rows), ChargeBatch)
+
+    def import_charges(self, legacy):
+        from apps.billing.models import Charge, ChargeLine
+
+        schools = IdMap("main_schooladmin")
+        years = IdMap("main_academicyear")
+        students = IdMap("main_student")
+        billing_years = IdMap("main_economicyear")
+        titles = IdMap("main_feetitle")
+        batches = IdMap("main_ledgerposting")
+
+        if Charge.all_objects.exists():
+            self.stdout.write("charges already imported; skipping")
+            return
+
+        charge_rows, line_specs, skipped = [], [], 0
+        with legacy.cursor(name="studentledgers") as cur:
+            cur.itersize = 10000
+            cur.execute(
+                "SELECT id, date, details, total, academic_year_id,"
+                " economic_year_id, ledger_posting_id, school_id, student_id,"
+                " remarks FROM main_studentledger ORDER BY id"
+            )
+            for (lid, date_bs, details, total, ay_lid, ey_lid, batch_lid,
+                 school_lid, student_lid, remarks) in cur:
+                student_id = students.get(student_lid)
+                ay_id, ey_id = years.get(ay_lid), billing_years.get(ey_lid)
+                if not (student_id and ay_id and ey_id and school_lid in schools):
+                    skipped += 1
+                    continue
+                details = details or {}
+                snapshot = details.pop("__titles", {}) or {}
+                charge = Charge(
+                    school_id=schools[school_lid], batch_id=batches.get(batch_lid),
+                    student_id=student_id, date_bs=date_bs or "",
+                    academic_year_id=ay_id, billing_year_id=ey_id,
+                    total=total or 0, remarks=remarks or "", legacy_id=lid,
+                )
+                charge_rows.append(charge)
+                for key, value in details.items():
+                    if not isinstance(value, int | float | str) or value in ("", None):
+                        continue
+                    line_type, title_id, label = self._line_meta(
+                        key, snapshot, titles.map
+                    )
+                    line_specs.append((charge, line_type, title_id, label, value))
+                if len(charge_rows) >= BATCH:
+                    self._flush_charges(charge_rows, line_specs)
+                    charge_rows, line_specs = [], []
+        self._flush_charges(charge_rows, line_specs)
+        self._report("charges", Charge.all_objects.count(), Charge)
+        self.stdout.write(f"  charge lines: {ChargeLine.all_objects.count()}")
+        if skipped:
+            self.stdout.write(self.style.WARNING(f"  skipped {skipped} unmapped ledgers"))
+
+    @staticmethod
+    def _flush_charges(charge_rows, line_specs):
+        from apps.billing.models import Charge, ChargeLine
+
+        Charge.objects.bulk_create(charge_rows, batch_size=BATCH)
+        ChargeLine.objects.bulk_create(
+            [
+                ChargeLine(
+                    charge=charge, line_type=line_type, fee_title_id=title_id,
+                    label=label, amount=value,
+                )
+                for charge, line_type, title_id, label, value in line_specs
+            ],
+            batch_size=BATCH,
+        )
+
+    def import_payments(self, legacy):
+        from apps.billing.models import Payment, PaymentLine
+
+        schools = IdMap("main_schooladmin")
+        years = IdMap("main_academicyear")
+        students = IdMap("main_student")
+        classes = IdMap("main_classinfo")
+        billing_years = IdMap("main_economicyear")
+        titles = IdMap("main_feetitle")
+        admin_accounts = IdMap("account_adminaccount")
+        staff_accounts = IdMap("account_staffaccount")
+
+        if Payment.all_objects.exists():
+            self.stdout.write("payments already imported; skipping")
+            return
+
+        # created_by: mined from the legacy audit log (§18.4). Content types
+        # in this dump: 27=studentinvoice, 7=adminaccount, 8=staffaccount.
+        creators = {}
+        for object_id, user_type, user_id in self._rows(
+            legacy,
+            "SELECT DISTINCT ON (object_id) object_id, user_type_id, user_id"
+            " FROM main_historylog WHERE object_type_id=27 AND action=1"
+            " ORDER BY object_id, id",
+        ):
+            account_map = {7: admin_accounts, 8: staff_accounts}.get(user_type)
+            if account_map:
+                creators[object_id] = account_map.get(user_id)
+
+        modes = {1: "cash", 2: "bank", 3: "cheque", 4: "wallet"}
+        payment_rows, line_specs, skipped = [], [], 0
+        with legacy.cursor(name="studentinvoices") as cur:
+            cur.itersize = 10000
+            cur.execute(
+                'SELECT id, invoice_id, date, details, total_paid, total_due,'
+                ' total_discount, payment_month, mode, remarks, academic_year_id,'
+                ' economic_year_id, school_id, student_id, extra_info,'
+                ' "isCashReceipt", class_info_id FROM main_studentinvoice ORDER BY id'
+            )
+            for (lid, serial, date_bs, details, paid, due, discount, month,
+                 mode, remarks, ay_lid, ey_lid, school_lid, student_lid,
+                 extra, is_cash, class_lid) in cur:
+                ay_id, ey_id = years.get(ay_lid), billing_years.get(ey_lid)
+                if not (ay_id and ey_id and school_lid in schools):
+                    skipped += 1
+                    continue
+                extra = extra if isinstance(extra, dict) else {}
+                payment = Payment(
+                    school_id=schools[school_lid],
+                    kind="cash_receipt" if is_cash else "regular",
+                    legacy_serial=serial, date_bs=date_bs or "",
+                    student_id=students.get(student_lid),
+                    class_info_id=classes.get(class_lid),
+                    academic_year_id=ay_id, billing_year_id=ey_id,
+                    payment_month=month or 0, mode=modes.get(mode, "cash"),
+                    total_paid=paid or 0, total_discount=discount,
+                    total_due=due, remarks=remarks or "",
+                    payer_name=str(extra.get("name") or "")[:100],
+                    payer_address=str(extra.get("address") or "")[:150],
+                    created_by_id=creators.get(lid), legacy_id=lid,
+                )
+                payment_rows.append(payment)
+                line_specs.extend(self._payment_lines(payment, details, titles.map))
+                if len(payment_rows) >= BATCH:
+                    self._flush_payments(payment_rows, line_specs)
+                    payment_rows, line_specs = [], []
+        self._flush_payments(payment_rows, line_specs)
+        self._report("payments", Payment.all_objects.count(), Payment)
+        self.stdout.write(f"  payment lines: {PaymentLine.all_objects.count()}")
+        self.stdout.write(f"  created_by resolved: "
+                          f"{Payment.all_objects.exclude(created_by=None).count()}")
+        if skipped:
+            self.stdout.write(self.style.WARNING(f"  skipped {skipped} unmapped invoices"))
+
+    def _payment_lines(self, payment, details, title_map):
+        """Explode invoice details (object OR cash-receipt array) into lines."""
+        specs = []
+        if isinstance(details, list):  # cash receipts: [{AMT, PAR}]
+            for item in details:
+                if isinstance(item, dict):
+                    specs.append((payment, "other", None,
+                                  str(item.get("PAR") or "")[:150],
+                                  item.get("AMT") or 0, 0, None, None, None))
+            return specs
+        if not isinstance(details, dict):
+            return specs
+        snapshot = details.pop("__titles", {}) or {}
+        for key, value in details.items():
+            line_type, title_id, label = self._line_meta(key, snapshot, title_map)
+            if isinstance(value, dict):
+                specs.append((payment, line_type, title_id, label,
+                              value.get("amt") or 0, value.get("dis") or 0,
+                              value.get("due"), value.get("tdsp"), value.get("tdsa")))
+            elif isinstance(value, int | float | str) and value not in ("", None):
+                specs.append((payment, line_type, title_id, label,
+                              value, 0, None, None, None))
+        return specs
+
+    @staticmethod
+    def _flush_payments(payment_rows, line_specs):
+        from apps.billing.models import Payment, PaymentLine
+
+        Payment.objects.bulk_create(payment_rows, batch_size=BATCH)
+        PaymentLine.objects.bulk_create(
+            [
+                PaymentLine(
+                    payment=payment, line_type=line_type, fee_title_id=title_id,
+                    label=label, amount=amount, discount=discount,
+                    due_after=due, tax_pct=tax_pct, tax_amount=tax_amount,
+                )
+                for (payment, line_type, title_id, label, amount, discount,
+                     due, tax_pct, tax_amount) in line_specs
+            ],
+            batch_size=BATCH,
+        )
 
     # ------------------------------------------------------------------
     # Helpers
