@@ -28,8 +28,9 @@ class Foundation(BaseModel):
 
 
 class Shareholder(BaseModel):
-    foundation = models.ForeignKey(
-        Foundation, on_delete=models.CASCADE, related_name="shareholders"
+    # Legacy links shareholders to the school (not the foundation) — preserved.
+    school = models.ForeignKey(
+        "tenants.School", on_delete=models.CASCADE, related_name="shareholders"
     )
     name = models.CharField(max_length=60)
     contact = models.CharField(max_length=20, blank=True, default="")
