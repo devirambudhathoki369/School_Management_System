@@ -29,3 +29,6 @@ frontend/.env.local
 .idea/
 *.swp
 .DS_Store
+
+# Compose secrets
+/.env
