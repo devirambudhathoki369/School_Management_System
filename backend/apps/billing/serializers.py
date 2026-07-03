@@ -156,7 +156,7 @@ class PaymentSerializer(TenantChildValidationMixin, serializers.ModelSerializer)
         with transaction.atomic():
             payment = Payment.objects.create(
                 serial=serials.allocate(
-                    request.school, validated_data["academic_year"], validated_data["kind"]
+                    request.school, validated_data["billing_year"], validated_data["kind"]
                 ),
                 # M3: snapshot the class at payment time; M1: total_paid is the
                 # pre-discount sum of lines, discount tracked separately.

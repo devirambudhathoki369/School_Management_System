@@ -138,7 +138,7 @@ class TestPayments:
         assert payment.total_discount == Decimal("100.00")
         assert payment.class_info_id == student.class_info_id  # M3 snapshot
 
-    def test_serials_are_sequential_per_year_and_kind(self, billing_setup):
+    def test_serials_are_sequential_per_fiscal_year_and_kind(self, billing_setup):
         school, student, year, billing_year, _ = billing_setup
         api = APIClient()
         login(api, "admin_bill", "admin")
@@ -154,11 +154,35 @@ class TestPayments:
         )
         assert cash.data["serial"] == 1  # separate series per kind
 
+    def test_serials_survive_academic_year_close(self, billing_setup):
+        """Numbering keys on the FISCAL year: a new academic year mid-
+        fiscal-year must NOT restart the counter (the legacy AY-keyed
+        counter minted duplicate receipt numbers)."""
+        school, student, year, billing_year, _ = billing_setup
+        api = APIClient()
+        login(api, "admin_bill", "admin")
+        first = self.make_payment(api, student, year, billing_year)
+        next_ay = AcademicYear.objects.create(
+            school=school, name="2083-serial",
+            start_date_bs="2083-01-01", end_date_bs="2083-12-30",
+        )
+        second = self.make_payment(
+            api, student, year, billing_year, academic_year=str(next_ay.id)
+        )
+        assert [first.data["serial"], second.data["serial"]] == [1, 2]
+        next_fy = BillingYear.objects.create(
+            name="2083/84-serial", start_date_bs="2083-04-01", end_date_bs="2084-03-30"
+        )
+        third = self.make_payment(
+            api, student, year, next_fy, academic_year=str(next_ay.id)
+        )
+        assert third.data["serial"] == 1  # new fiscal year restarts numbering
+
     @pytest.mark.django_db(transaction=True)
     def test_serial_allocation_requires_transaction(self, billing_setup):
-        school, student, year, _, _ = billing_setup
+        school, student, year, billing_year, _ = billing_setup
         with pytest.raises(RuntimeError):
-            serials.allocate(school, year, "regular")
+            serials.allocate(school, billing_year, "regular")
 
     def test_dues_respect_pre_discount_semantics(self, billing_setup):
         school, student, year, billing_year, tuition = billing_setup

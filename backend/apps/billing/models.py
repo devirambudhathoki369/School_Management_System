@@ -7,9 +7,12 @@ not JSON spelunking. Money invariants preserved (§19):
 
 - M1: Payment.total_paid does NOT have discount pre-subtracted; the discount
   is its own column (and DISCOUNT lines). Any report must respect this.
-- M2 (fixed): receipt serials are per (school, academic-year, kind) counters
+- M2 (fixed): receipt serials are per (school, fiscal-year, kind) counters
   allocated inside the payment transaction — the legacy max+1 raced and left
   25,627 duplicate serials; historical serials import as display-only.
+  Fiscal (economic) year, not academic year: the final legacy code keys
+  receipts on the EY so numbers never restart mid-fiscal-year, and Nepal
+  IRD invoice numbering runs per fiscal year.
 - M3: a payment snapshots the student's class at payment time.
 - M4: line labels snapshot the fee-title name at write time.
 - M5/M6: one fee per (class, title); a section-specific fee overrides the
@@ -173,21 +176,27 @@ class ChargeLine(BaseModel):
 
 
 class ReceiptSerialCounter(models.Model):
-    """Per (school, AY, kind) receipt numbering — the M2 fix. Rows are locked
-    (SELECT ... FOR UPDATE) inside the payment transaction."""
+    """Per (school, fiscal year, kind) receipt numbering — the M2 fix.
+    Keyed on the ECONOMIC year, not the academic year: the legacy fix moved
+    receipts off the AY because an AY closing mid-fiscal-year restarted the
+    counter and minted duplicate numbers (IRD numbering is fiscal-year too).
+    Rows are locked (SELECT ... FOR UPDATE) inside the payment transaction."""
 
     id = models.BigAutoField(primary_key=True)
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="+")
-    academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, related_name="+")
+    billing_year = models.ForeignKey(BillingYear, on_delete=models.CASCADE, related_name="+")
     kind = models.CharField(max_length=12, choices=FeeTitle.Kind.choices)
     last_serial = models.PositiveIntegerField(default=0)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["school", "academic_year", "kind"], name="uniq_serial_counter"
+                fields=["school", "billing_year", "kind"], name="uniq_serial_counter"
             ),
         ]
+
+    def __str__(self):
+        return f"{self.school} {self.billing_year} {self.kind}: {self.last_serial}"
 
 
 class Payment(TenantScopedModel):
@@ -231,7 +240,7 @@ class Payment(TenantScopedModel):
         indexes = [models.Index(fields=["school", "student"])]
         constraints = [
             models.UniqueConstraint(
-                fields=["school", "academic_year", "kind", "serial"],
+                fields=["school", "billing_year", "kind", "serial"],
                 condition=models.Q(serial__isnull=False),
                 name="uniq_receipt_serial",
             ),
