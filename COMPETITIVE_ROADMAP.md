@@ -8,17 +8,17 @@
 
 ## 1. Where Veda is strong (gaps we must close)
 
-| Veda feature | Status in our platform | Priority |
-| --- | --- | --- |
-| **Parent mobile app** (attendance, billing, progress, notices) | Guardian role exists in identity; no app yet | **P1** — legacy's biggest UX gap (doc §18.1); guardians are already first-class in our data model |
-| **Online fee payment** (eSewa/Khalti/FonePay gateways) | Not built | **P1** — revenue-critical; auto-reconcile into invoices (doc §18.2) |
-| **IRD-verified billing** (Nepal tax compliance) | Not built | **P1** — a hard sales blocker for private schools; design invoice numbering + immutability to IRD spec from day one (our transactional serial fix is the foundation) |
-| Zoom-integrated online classes | Not built | P3 — commodity integration, add post-launch |
-| Online subjective/objective exams (LMS-lite) | Marks-entry only (legacy parity) | P2 — extends our examinations module |
-| Online admissions | Not built | P2 — public form → pending-student workflow |
-| Bus tracking w/ parent push | Legacy has proximity alerts; no parent push | P2 — lands with transport + parent app |
-| Founder's app (multi-school owner dashboard) | Foundation entity exists; no dashboard | P2 — we model Foundation→Schools natively, so this is a view not a rewrite |
-| Visitor records | Not built | P3 |
+| Veda feature                                                   | Status in our platform                       | Priority                                                                                                                                                             |
+| -------------------------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Parent mobile app** (attendance, billing, progress, notices) | Guardian role exists in identity; no app yet | **P1** — legacy's biggest UX gap (doc §18.1); guardians are already first-class in our data model                                                                    |
+| **Online fee payment** (eSewa/Khalti/FonePay gateways)         | Not built                                    | **P1** — revenue-critical; auto-reconcile into invoices (doc §18.2)                                                                                                  |
+| **IRD-verified billing** (Nepal tax compliance)                | Not built                                    | **P1** — a hard sales blocker for private schools; design invoice numbering + immutability to IRD spec from day one (our transactional serial fix is the foundation) |
+| Zoom-integrated online classes                                 | Not built                                    | P3 — commodity integration, add post-launch                                                                                                                          |
+| Online subjective/objective exams (LMS-lite)                   | Marks-entry only (legacy parity)             | P2 — extends our examinations module                                                                                                                                 |
+| Online admissions                                              | Not built                                    | P2 — public form → pending-student workflow                                                                                                                          |
+| Bus tracking w/ parent push                                    | Legacy has proximity alerts; no parent push  | P2 — lands with transport + parent app                                                                                                                               |
+| Founder's app (multi-school owner dashboard)                   | Foundation entity exists; no dashboard       | P2 — we model Foundation→Schools natively, so this is a view not a rewrite                                                                                           |
+| Visitor records                                                | Not built                                    | P3                                                                                                                                                                   |
 
 ## 2. Where we already beat Veda (press these advantages)
 

@@ -119,7 +119,7 @@ class Command(BaseCommand):
             "--phase",
             choices=[
                 "all", "tenants", "academics", "people", "examinations",
-                "attendance", "devices", "billing",
+                "attendance", "devices", "billing", "payroll",
             ],
             default="all",
         )
@@ -162,6 +162,13 @@ class Command(BaseCommand):
                     self.import_charges(legacy)
                 with transaction.atomic():
                     self.import_payments(legacy)
+            if phase in ("all", "payroll"):
+                with transaction.atomic():
+                    self.import_salary_structures(legacy)
+                with transaction.atomic():
+                    self.import_salary_accruals(legacy)
+                with transaction.atomic():
+                    self.import_salary_payments(legacy)
         self.stdout.write(self.style.SUCCESS("Import finished."))
 
     # ------------------------------------------------------------------
@@ -1206,7 +1213,8 @@ class Command(BaseCommand):
         batches = IdMap("main_ledgerposting")
 
         if Charge.all_objects.exists():
-            self.stdout.write("charges already imported; skipping")
+            self.stdout.write("charges already imported; syncing soft-delete flags")
+            self._sync_active_flags(legacy, "main_studentledger", Charge)
             return
 
         charge_rows, line_specs, skipped = [], [], 0
@@ -1215,10 +1223,10 @@ class Command(BaseCommand):
             cur.execute(
                 "SELECT id, date, details, total, academic_year_id,"
                 " economic_year_id, ledger_posting_id, school_id, student_id,"
-                " remarks FROM main_studentledger ORDER BY id"
+                " remarks, is_active FROM main_studentledger ORDER BY id"
             )
             for (lid, date_bs, details, total, ay_lid, ey_lid, batch_lid,
-                 school_lid, student_lid, remarks) in cur:
+                 school_lid, student_lid, remarks, active) in cur:
                 student_id = students.get(student_lid)
                 ay_id, ey_id = years.get(ay_lid), billing_years.get(ey_lid)
                 if not (student_id and ay_id and ey_id and school_lid in schools):
@@ -1230,7 +1238,8 @@ class Command(BaseCommand):
                     school_id=schools[school_lid], batch_id=batches.get(batch_lid),
                     student_id=student_id, date_bs=date_bs or "",
                     academic_year_id=ay_id, billing_year_id=ey_id,
-                    total=total or 0, remarks=remarks or "", legacy_id=lid,
+                    total=total or 0, remarks=remarks or "", is_active=active,
+                    legacy_id=lid,
                 )
                 charge_rows.append(charge)
                 for key, value in details.items():
@@ -1278,7 +1287,8 @@ class Command(BaseCommand):
         staff_accounts = IdMap("account_staffaccount")
 
         if Payment.all_objects.exists():
-            self.stdout.write("payments already imported; skipping")
+            self.stdout.write("payments already imported; syncing soft-delete flags")
+            self._sync_active_flags(legacy, "main_studentinvoice", Payment)
             return
 
         # created_by: mined from the legacy audit log (§18.4). Content types
@@ -1302,11 +1312,12 @@ class Command(BaseCommand):
                 'SELECT id, invoice_id, date, details, total_paid, total_due,'
                 ' total_discount, payment_month, mode, remarks, academic_year_id,'
                 ' economic_year_id, school_id, student_id, extra_info,'
-                ' "isCashReceipt", class_info_id FROM main_studentinvoice ORDER BY id'
+                ' "isCashReceipt", class_info_id, is_active'
+                ' FROM main_studentinvoice ORDER BY id'
             )
             for (lid, serial, date_bs, details, paid, due, discount, month,
                  mode, remarks, ay_lid, ey_lid, school_lid, student_lid,
-                 extra, is_cash, class_lid) in cur:
+                 extra, is_cash, class_lid, active) in cur:
                 ay_id, ey_id = years.get(ay_lid), billing_years.get(ey_lid)
                 if not (ay_id and ey_id and school_lid in schools):
                     skipped += 1
@@ -1324,7 +1335,7 @@ class Command(BaseCommand):
                     total_due=due, remarks=remarks or "",
                     payer_name=str(extra.get("name") or "")[:100],
                     payer_address=str(extra.get("address") or "")[:150],
-                    created_by_id=creators.get(lid), legacy_id=lid,
+                    created_by_id=creators.get(lid), is_active=active, legacy_id=lid,
                 )
                 payment_rows.append(payment)
                 line_specs.extend(self._payment_lines(payment, details, titles.map))
@@ -1382,8 +1393,240 @@ class Command(BaseCommand):
         )
 
     # ------------------------------------------------------------------
+    # Phase 8: payroll (salary structures, accruals, payments)
+    # ------------------------------------------------------------------
+
+    def import_salary_structures(self, legacy):
+        """StaffOtherInfo finance fields -> SalaryStructure. All-zero
+        structures without a PAN are skipped: they mean "not on payroll",
+        not a zero salary agreement."""
+        from apps.payroll.models import SalaryStructure
+
+        schools = IdMap("main_schooladmin")
+        staff_map = IdMap("main_staff")
+        structures = IdMap("main_staffotherinfo")
+
+        created = 0
+        for (oi_lid, staff_lid, school_lid, basic, grade, allowance, extra,
+             insurance, pf, pan, joined) in self._rows(
+            legacy,
+            """
+            SELECT o.id, s.id, s.school_id, o.basic_salary, o.grade,
+                   o.allowance, o.extra, o.insurance, o.pf_contrib,
+                   o.pan_no, o.joined_date
+            FROM main_staff s
+            JOIN main_staffotherinfo o ON o.id = s.other_info_id
+            ORDER BY o.id
+            """,
+        ):
+            staff_id = staff_map.get(staff_lid)
+            if oi_lid in structures or staff_id is None or school_lid not in schools:
+                continue
+            if not any((basic, grade, allowance, extra, insurance, pf)) and not (
+                pan or ""
+            ).strip():
+                continue
+            structure = SalaryStructure.objects.create(
+                school_id=schools[school_lid], staff_id=staff_id,
+                effective_from_bs=joined or "", basic_salary=basic or 0,
+                grade=grade or 0, allowance=allowance or 0, extra=extra or 0,
+                insurance=insurance or 0, pf_contribution=pf or 0,
+                pan_no=(pan or "").strip()[:20], legacy_id=oi_lid,
+            )
+            structures.record([(oi_lid, structure.id, "payroll_salarystructure")])
+            created += 1
+        self._report("salary structures", created, SalaryStructure)
+
+    EARNING_HEADS = ("salary", "grade", "allowance", "extra")
+
+    def import_salary_accruals(self, legacy):
+        from decimal import Decimal
+
+        from apps.payroll.models import SalaryAccrual, SalaryAccrualLine
+
+        schools = IdMap("main_schooladmin")
+        years = IdMap("main_academicyear")
+        billing_years = IdMap("main_economicyear")
+        staff_map = IdMap("main_staff")
+
+        if SalaryAccrual.all_objects.exists():
+            self.stdout.write("salary accruals already imported; skipping")
+            return
+
+        creators = self._mine_creators(legacy, object_type_id=49)  # staffledger
+        accruals, lines, skipped, bad_heads = [], [], 0, 0
+        for (lid, date_bs, remarks, months, details, total, ay_lid, ey_lid,
+             school_lid, staff_lid, active) in self._rows(
+            legacy,
+            "SELECT id, date, remarks, months, details, total, academic_year_id,"
+            " economic_year_id, school_id, staff_id, is_active"
+            " FROM main_staffledger ORDER BY id",
+        ):
+            staff_id = staff_map.get(staff_lid)
+            ay_id, ey_id = years.get(ay_lid), billing_years.get(ey_lid)
+            if not (staff_id and ay_id and ey_id and school_lid in schools):
+                skipped += 1
+                continue
+            accrual = SalaryAccrual(
+                school_id=schools[school_lid], staff_id=staff_id,
+                date_bs=date_bs or "", months=months or [],
+                academic_year_id=ay_id, billing_year_id=ey_id,
+                total=total or 0, remarks=remarks or "",
+                created_by_id=creators.get(lid), is_active=active, legacy_id=lid,
+            )
+            accruals.append(accrual)
+            # breakdown-less legacy rows are pure salary (LedgerViewsStaff
+            # treated their total as the salary head)
+            heads = details or {"salary": total or 0}
+            for head, amount in heads.items():
+                if head not in self.EARNING_HEADS:
+                    bad_heads += 1
+                    continue
+                lines.append(
+                    SalaryAccrualLine(
+                        accrual=accrual, earning_type=head,
+                        amount=Decimal(str(amount or 0)),
+                    )
+                )
+        SalaryAccrual.objects.bulk_create(accruals, batch_size=BATCH)
+        SalaryAccrualLine.objects.bulk_create(lines, batch_size=BATCH)
+        self._report("salary accruals", len(accruals), SalaryAccrual)
+        self.stdout.write(f"  accrual lines: {SalaryAccrualLine.all_objects.count()}")
+        if skipped or bad_heads:
+            self.stdout.write(
+                self.style.WARNING(f"  skipped {skipped} unmapped, {bad_heads} unknown heads")
+            )
+
+    def import_salary_payments(self, legacy):
+        from decimal import Decimal
+
+        from apps.payroll.models import SalaryPayment, SalaryPaymentLine
+
+        schools = IdMap("main_schooladmin")
+        years = IdMap("main_academicyear")
+        billing_years = IdMap("main_economicyear")
+        staff_map = IdMap("main_staff")
+
+        if SalaryPayment.all_objects.exists():
+            self.stdout.write("salary payments already imported; skipping")
+            return
+
+        def dec(value):
+            return Decimal(str(value)) if value not in (None, "") else None
+
+        creators = self._mine_creators(legacy, object_type_id=48)  # staffinvoice
+        modes = {1: "cash", 2: "bank", 3: "cheque", 4: "wallet"}
+        payments, lines, skipped, bad_heads, mismatched = [], [], 0, 0, 0
+        for (lid, serial, date_bs, details, paid, due, tds, pf, insurance,
+             month, mode, remarks, extra, ay_lid, ey_lid, school_lid,
+             staff_lid, active) in self._rows(
+            legacy,
+            "SELECT id, invoice_id, date, details, total_paid, total_due,"
+            " total_deduction, pf_deduction, insurance_deduction, payment_month,"
+            " mode, remarks, extra_info, academic_year_id, economic_year_id,"
+            " school_id, staff_id, is_active FROM main_staffinvoice ORDER BY id",
+        ):
+            staff_id = staff_map.get(staff_lid)
+            ay_id, ey_id = years.get(ay_lid), billing_years.get(ey_lid)
+            if not (staff_id and ay_id and ey_id and school_lid in schools):
+                skipped += 1
+                continue
+            paid = Decimal(str(paid or 0))
+            tds, pf = Decimal(str(tds or 0)), Decimal(str(pf or 0))
+            insurance = Decimal(str(insurance or 0))
+            # M1 normalization: legacy total_paid is post-deduction (net
+            # cash); the gross liability settled adds the withholdings back.
+            # Verified on all 543 production rows: sum(details.amt) ==
+            # total_paid + total_deduction (+ pf + insurance).
+            gross = paid + tds + pf + insurance
+            extra = extra if isinstance(extra, dict) else {}
+            payment = SalaryPayment(
+                school_id=schools[school_lid], staff_id=staff_id,
+                legacy_serial=serial, date_bs=date_bs or "",
+                academic_year_id=ay_id, billing_year_id=ey_id,
+                payment_month=month or 0, mode=modes.get(mode, "cash"),
+                gross=gross, tds_amount=tds, pf_amount=pf,
+                insurance_amount=insurance, net_paid=paid,
+                tds_percent=dec(extra.get("tds_percent")), total_due=due,
+                remarks=remarks or "", created_by_id=creators.get(lid),
+                is_active=active, legacy_id=lid,
+            )
+            payments.append(payment)
+            if not details:
+                lines.append(
+                    SalaryPaymentLine(payment=payment, earning_type="salary", amount=gross)
+                )
+                continue
+            line_gross = Decimal("0")
+            for head, hd in details.items():
+                if head not in self.EARNING_HEADS or not isinstance(hd, dict):
+                    bad_heads += 1
+                    continue
+                amount = Decimal(str(hd.get("amt") or 0))
+                line_gross += amount
+                lines.append(
+                    SalaryPaymentLine(
+                        payment=payment, earning_type=head, amount=amount,
+                        due_after=dec(hd.get("due")), tds_pct=dec(hd.get("tdsp")),
+                        tds_amount=dec(hd.get("tdsa")),
+                    )
+                )
+            if line_gross != gross:
+                mismatched += 1
+        SalaryPayment.objects.bulk_create(payments, batch_size=BATCH)
+        SalaryPaymentLine.objects.bulk_create(lines, batch_size=BATCH)
+        self._report("salary payments", len(payments), SalaryPayment)
+        self.stdout.write(f"  payment lines: {SalaryPaymentLine.all_objects.count()}")
+        self.stdout.write(
+            f"  created_by resolved: "
+            f"{SalaryPayment.all_objects.exclude(created_by=None).count()}"
+        )
+        if skipped or bad_heads or mismatched:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"  skipped {skipped} unmapped, {bad_heads} unknown heads,"
+                    f" {mismatched} line-sum/gross mismatches"
+                )
+            )
+
+    # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _mine_creators(self, legacy, object_type_id: int) -> dict:
+        """created_by mined from the legacy audit log (action 1 = create;
+        user types: 7=adminaccount, 8=staffaccount)."""
+        admin_accounts = IdMap("account_adminaccount")
+        staff_accounts = IdMap("account_staffaccount")
+        creators = {}
+        for object_id, user_type, user_id in self._rows(
+            legacy,
+            "SELECT DISTINCT ON (object_id) object_id, user_type_id, user_id"  # noqa: S608
+            f" FROM main_historylog WHERE object_type_id={int(object_type_id)}"
+            " AND action=1 ORDER BY object_id, id",
+        ):
+            account_map = {7: admin_accounts, 8: staff_accounts}.get(user_type)
+            if account_map:
+                creators[object_id] = account_map.get(user_id)
+        return creators
+
+    def _sync_active_flags(self, legacy, legacy_table: str, model):
+        """Backfill soft-delete flags dropped by earlier import runs."""
+        inactive_ids = [
+            row[0]
+            for row in self._rows(
+                legacy, f"SELECT id FROM {legacy_table} WHERE NOT is_active"  # noqa: S608
+            )
+        ]
+        changed = model.all_objects.filter(
+            legacy_id__in=inactive_ids, is_active=True
+        ).update(is_active=False)
+        if changed:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"  {legacy_table}: marked {changed} legacy-deleted rows inactive"
+                )
+            )
 
     @staticmethod
     def _rows(legacy, sql: str):
