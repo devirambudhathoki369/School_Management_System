@@ -120,6 +120,7 @@ class Command(BaseCommand):
             choices=[
                 "all", "tenants", "academics", "people", "examinations",
                 "attendance", "devices", "billing", "payroll", "accounting",
+                "longtail",
             ],
             default="all",
         )
@@ -174,6 +175,17 @@ class Command(BaseCommand):
                     self.import_accounting_structure(legacy)
                 with transaction.atomic():
                     self.import_vouchers(legacy)
+            if phase in ("all", "longtail"):
+                with transaction.atomic():
+                    self.import_homework(legacy)
+                with transaction.atomic():
+                    self.import_library(legacy)
+                with transaction.atomic():
+                    self.import_transport(legacy)
+                with transaction.atomic():
+                    self.import_communication(legacy)
+                with transaction.atomic():
+                    self.import_inventory(legacy)
         self.stdout.write(self.style.SUCCESS("Import finished."))
 
     # ------------------------------------------------------------------
@@ -1812,6 +1824,370 @@ class Command(BaseCommand):
         )
         if skipped:
             self.stdout.write(self.style.WARNING(f"  skipped {skipped} unmapped entries"))
+
+    # ------------------------------------------------------------------
+    # Phase 10: long-tail modules
+    # ------------------------------------------------------------------
+
+    def import_homework(self, legacy):
+        from apps.homework.models import Homework, HomeworkAttachment
+
+        schools = IdMap("main_schooladmin")
+        classes = IdMap("main_classinfo")
+        subjects = IdMap("main_subject")
+        staff_map = IdMap("main_staff")
+
+        if Homework.all_objects.exists():
+            self.stdout.write("homework already imported; skipping")
+            return
+        rows, skipped = [], 0
+        hw_by_lid = {}
+        for (lid, title, description, due, class_lid, subject_lid, staff_lid,
+             school_lid, active) in self._rows(
+            legacy,
+            "SELECT id, title, description, due_date, class_info_id, subject_id,"
+            " staff_id, school_id, is_active FROM main_homework ORDER BY id",
+        ):
+            keys = (classes.get(class_lid), subjects.get(subject_lid), staff_map.get(staff_lid))
+            if school_lid not in schools or not all(keys):
+                skipped += 1
+                continue
+            hw = Homework(
+                school_id=schools[school_lid], title=title[:200],
+                description=description or "", due_date_bs=due or "",
+                class_info_id=keys[0], subject_id=keys[1], staff_id=keys[2],
+                is_active=active, legacy_id=lid,
+            )
+            rows.append(hw)
+            hw_by_lid[lid] = hw
+        Homework.objects.bulk_create(rows, batch_size=BATCH)
+        # legacy relative media paths go straight into the FileField; the
+        # media rsync preserves paths
+        attachments = [
+            HomeworkAttachment(homework=hw_by_lid[hw_lid], file=path, legacy_id=lid)
+            for lid, hw_lid, path in self._rows(
+                legacy, "SELECT id, homework_id, file FROM main_homeworkfile ORDER BY id"
+            )
+            if hw_lid in hw_by_lid and path
+        ]
+        HomeworkAttachment.objects.bulk_create(attachments, batch_size=BATCH)
+        self._report("homework", len(rows), Homework)
+        self.stdout.write(f"  attachments: {len(attachments)}")
+        if skipped:
+            self.stdout.write(self.style.WARNING(f"  skipped {skipped} unmapped homework"))
+
+    def import_library(self, legacy):
+        from apps.library.models import Library
+
+        schools = IdMap("main_schooladmin")
+        libraries = IdMap("library_library")
+
+        created = 0
+        for lid, school_lid, name, address, contacts, prefs, active in self._rows(
+            legacy,
+            "SELECT id, school_id, name, address, contacts, preferences,"
+            " is_active FROM library_library ORDER BY id",
+        ):
+            if lid in libraries or school_lid not in schools:
+                continue
+            prefs = prefs if isinstance(prefs, dict) else {}
+            shared_lid = prefs.get("shared_to")
+            shared_id = schools.get(int(shared_lid)) if shared_lid else None
+            library = Library.objects.create(
+                school_id=schools[school_lid], name=name[:50],
+                address=(address or "")[:50], contacts=contacts or "",
+                fine_per_day=prefs.get("fine_per_day") or 0,
+                fine_on_damage=prefs.get("fine_on_damage") or 0,
+                shared_with_id=shared_id, is_active=active, legacy_id=lid,
+            )
+            libraries.record([(lid, library.id, "library_library")])
+            created += 1
+        self._report("libraries", created, Library)
+        # book/copy/loan tables: zero production rows (schema-only port)
+
+    def import_transport(self, legacy):
+        from apps.transport.models import BusStation, ProximityAlert, RiderSubscription
+
+        schools = IdMap("main_schooladmin")
+        students = IdMap("main_student")
+        stations = IdMap("main_busstation")
+
+        created = 0
+        for lid, name, school_lid, fee, lat, lng, active in self._rows(
+            legacy,
+            "SELECT id, station, school_id, fee, latitude, longitude,"
+            " is_active FROM main_busstation ORDER BY id",
+        ):
+            if lid in stations or school_lid not in schools:
+                continue
+            station = BusStation.objects.create(
+                school_id=schools[school_lid], name=name[:50], fee=fee or 0,
+                latitude=lat, longitude=lng, is_active=active, legacy_id=lid,
+            )
+            stations.record([(lid, station.id, "transport_busstation")])
+            created += 1
+        self._report("bus stations", created, BusStation)
+
+        if not RiderSubscription.all_objects.exists():
+            riders, skipped = [], 0
+            for (lid, station_lid, start, student_lid, school_lid, remarks,
+                 active) in self._rows(
+                legacy,
+                "SELECT id, bus_station_id, start_date, student_id, school_id,"
+                " remarks, is_active FROM main_studenttransportationinfo ORDER BY id",
+            ):
+                student_id = students.get(student_lid)
+                if school_lid not in schools or student_id is None:
+                    skipped += 1
+                    continue
+                riders.append(
+                    RiderSubscription(
+                        school_id=schools[school_lid], student_id=student_id,
+                        bus_station_id=stations.get(station_lid),
+                        start_date_bs=start or "", remarks=(remarks or "")[:50],
+                        is_active=active, legacy_id=lid,
+                    )
+                )
+            RiderSubscription.objects.bulk_create(riders, batch_size=BATCH)
+            self._report("rider subscriptions", len(riders), RiderSubscription)
+            if skipped:
+                self.stdout.write(self.style.WARNING(f"  skipped {skipped} unmapped riders"))
+
+        if not ProximityAlert.all_objects.exists():
+            from apps.people.models import Staff, Student
+
+            # the legacy table has no school column: derive it from the
+            # subscriber (student or staff)
+            student_rows = {
+                legacy_id: (new_id, school_id)
+                for legacy_id, new_id, school_id in Student.all_objects.filter(
+                    legacy_id__isnull=False
+                ).values_list("legacy_id", "id", "school_id")
+            }
+            staff_rows = {
+                legacy_id: (new_id, school_id)
+                for legacy_id, new_id, school_id in Staff.all_objects.filter(
+                    legacy_id__isnull=False
+                ).values_list("legacy_id", "id", "school_id")
+            }
+            alerts, skipped = [], 0
+            for (lid, bus_id, student_lid, staff_lid, lat, lng, alert_range,
+                 alerted, active) in self._rows(
+                legacy,
+                "SELECT id, bus_id, student_id_id, staff_id_id, latitude, longitude,"
+                " alert_range, alerted_date, is_active"
+                " FROM main_bustrackonalertinfo ORDER BY id",
+            ):
+                student = student_rows.get(student_lid)
+                staff = staff_rows.get(staff_lid)
+                school_id = (student or staff or (None, None))[1]
+                if school_id is None:
+                    skipped += 1
+                    continue
+                alerts.append(
+                    ProximityAlert(
+                        school_id=school_id, bus_number=bus_id or 0,
+                        student_id=student[0] if student else None,
+                        staff_id=staff[0] if staff else None,
+                        latitude=lat, longitude=lng, alert_range=alert_range or 0,
+                        alerted_date=alerted, is_active=active, legacy_id=lid,
+                    )
+                )
+            ProximityAlert.objects.bulk_create(alerts, batch_size=BATCH)
+            self._report("proximity alerts", len(alerts), ProximityAlert)
+            if skipped:
+                self.stdout.write(self.style.WARNING(f"  skipped {skipped} unmapped alerts"))
+
+    CALENDAR_TYPES = {1: "holiday", 2: "exam", 3: "result", 4: "event", 5: "vacation"}
+    TEMPLATE_KINDS = {1: "dues", 2: "payment", 3: "result", 4: "attendance", 5: "birthday"}
+    PUSH_STATUSES = {1: "sent", 2: "failed", 3: "stale"}
+
+    def import_communication(self, legacy):
+        from apps.communication.models import (
+            CalendarEvent,
+            DeliveryLog,
+            MessageTemplate,
+            NewsImage,
+            NewsPost,
+            Notice,
+        )
+
+        schools = IdMap("main_schooladmin")
+        if Notice.all_objects.exists():
+            self.stdout.write("communication already imported; skipping")
+            return
+
+        notices = [
+            Notice(
+                school_id=schools[school_lid], title=title[:100],
+                description=description or "", date_bs=date or "",
+                image=image or None, is_active=active, legacy_id=lid,
+            )
+            for lid, title, description, school_lid, date, image, active in self._rows(
+                legacy,
+                "SELECT id, title, description, school_id, date, image,"
+                " is_active FROM main_notice ORDER BY id",
+            )
+            if school_lid in schools
+        ]
+        Notice.objects.bulk_create(notices, batch_size=BATCH)
+
+        posts = [
+            NewsPost(
+                school_id=schools[school_lid], title=title[:255],
+                content=content or "", is_active=active, legacy_id=lid,
+            )
+            for lid, title, content, school_lid, active in self._rows(
+                legacy,
+                "SELECT id, title, content, school_id, is_active"
+                " FROM main_newsevent ORDER BY id",
+            )
+            if school_lid in schools
+        ]
+        NewsPost.objects.bulk_create(posts, batch_size=BATCH)
+        images = [
+            # the legacy gallery had no post FK; imported images stay unlinked
+            NewsImage(school_id=schools[school_lid], image=image, legacy_id=lid)
+            for lid, image, school_lid in self._rows(
+                legacy, "SELECT id, image, school_id FROM main_newseventimage ORDER BY id"
+            )
+            if school_lid in schools and image
+        ]
+        NewsImage.objects.bulk_create(images, batch_size=BATCH)
+
+        events = [
+            CalendarEvent(
+                school_id=schools[school_lid], start_date_bs=start or "",
+                end_date_bs=end or "", event_type=self.CALENDAR_TYPES.get(etype, "event"),
+                color=color or "", description=description or "",
+                is_active=active, legacy_id=lid,
+            )
+            for (lid, start, end, etype, color, description, school_lid,
+                 active) in self._rows(
+                legacy,
+                "SELECT id, start_date, end_date, type, color, description,"
+                " school_id, is_active FROM main_calendarevent ORDER BY id",
+            )
+            if school_lid in schools
+        ]
+        CalendarEvent.objects.bulk_create(events, batch_size=BATCH)
+
+        templates = [
+            MessageTemplate(
+                school_id=schools[school_lid], kind=self.TEMPLATE_KINDS.get(kind, "dues"),
+                body=body or "", is_active=active, legacy_id=lid,
+            )
+            for lid, kind, school_lid, body, active in self._rows(
+                legacy,
+                "SELECT id, type, school_id, template, is_active"
+                " FROM main_smstemplate ORDER BY id",
+            )
+            if school_lid in schools
+        ]
+        MessageTemplate.objects.bulk_create(templates, batch_size=BATCH)
+
+        # delivery log: (role, legacy person id) -> unified account
+        from apps.people.models import Staff, Student
+
+        student_accounts = dict(
+            Student.all_objects.filter(legacy_id__isnull=False)
+            .values_list("legacy_id", "account_id")
+        )
+        staff_accounts = dict(
+            Staff.all_objects.filter(legacy_id__isnull=False)
+            .values_list("legacy_id", "account_id")
+        )
+        account_maps = {"student": student_accounts, "staff": staff_accounts}
+        logs, matched = [], 0
+        for (lid, school_lid, role, recipient_lid, title, body, data, status,
+             sent_at, active) in self._rows(
+            legacy,
+            "SELECT id, school_id, recipient_role, recipient_id, title, body,"
+            " data, status, sent_at, is_active"
+            " FROM main_notificationhistory ORDER BY id",
+        ):
+            if school_lid not in schools:
+                continue
+            account_id = account_maps.get(role, {}).get(recipient_lid)
+            matched += account_id is not None
+            logs.append(
+                DeliveryLog(
+                    school_id=schools[school_lid], recipient_id=account_id,
+                    legacy_recipient_role=role or "", legacy_recipient_id=recipient_lid,
+                    title=(title or "")[:120], body=(body or "")[:500], data=data,
+                    status=self.PUSH_STATUSES.get(status, "failed"),
+                    sent_at=sent_at, is_active=active, legacy_id=lid,
+                )
+            )
+        DeliveryLog.objects.bulk_create(logs, batch_size=BATCH)
+        self.stdout.write(self.style.SUCCESS(
+            f"[communication] notices {len(notices)}, posts {len(posts)},"
+            f" images {len(images)}, events {len(events)},"
+            f" templates {len(templates)}, delivery logs {len(logs)}"
+            f" (recipient matched: {matched})"
+        ))
+
+    def import_inventory(self, legacy):
+        from apps.inventory.models import Category, Item, StockTransaction
+
+        schools = IdMap("main_schooladmin")
+        years = IdMap("main_academicyear")
+        billing_years = IdMap("main_economicyear")
+        categories = IdMap("main_inventorycategory")
+        items = IdMap("main_inventoryitem")
+
+        txn_types = {1: "purchase", 2: "issue", 3: "adjustment", 4: "wastage"}
+        for lid, name, school_lid, active in self._rows(
+            legacy,
+            "SELECT id, name, school_id, is_active FROM main_inventorycategory ORDER BY id",
+        ):
+            if lid in categories or school_lid not in schools:
+                continue
+            category = Category.objects.create(
+                school_id=schools[school_lid], name=name[:60],
+                is_active=active, legacy_id=lid,
+            )
+            categories.record([(lid, category.id, "inventory_category")])
+
+        for (lid, name, category_lid, unit, reorder, school_lid, active) in self._rows(
+            legacy,
+            "SELECT id, name, category_id, unit, reorder_level, school_id,"
+            " is_active FROM main_inventoryitem ORDER BY id",
+        ):
+            if lid in items or school_lid not in schools:
+                continue
+            item = Item.objects.create(
+                school_id=schools[school_lid], name=name[:100],
+                category_id=categories.get(category_lid), unit=(unit or "")[:20],
+                reorder_level=reorder, is_active=active, legacy_id=lid,
+            )
+            items.record([(lid, item.id, "inventory_item")])
+
+        created = 0
+        if not StockTransaction.all_objects.exists():
+            for (lid, item_lid, txn_type, quantity, unit_price, total, date_bs,
+                 ay_lid, ey_lid, supplier, party, school_lid, remarks,
+                 active) in self._rows(
+                legacy,
+                "SELECT id, item_id, txn_type, quantity, unit_price, total, date,"
+                " academic_year_id, economic_year_id, supplier, party_or_purpose,"
+                " school_id, remarks, is_active FROM main_inventorytransaction ORDER BY id",
+            ):
+                item_id, ay_id = items.get(item_lid), years.get(ay_lid)
+                if school_lid not in schools or not (item_id and ay_id):
+                    continue
+                StockTransaction.objects.create(
+                    school_id=schools[school_lid], item_id=item_id,
+                    txn_type=txn_types.get(txn_type, "purchase"),
+                    quantity=quantity or 0, unit_price=unit_price, total=total,
+                    date_bs=date_bs or "", academic_year_id=ay_id,
+                    billing_year_id=billing_years.get(ey_lid),
+                    supplier=(supplier or "")[:100],
+                    party_or_purpose=(party or "")[:150],
+                    remarks=(remarks or "")[:250], is_active=active, legacy_id=lid,
+                )
+                created += 1
+        self._report("inventory transactions", created, StockTransaction)
 
     # ------------------------------------------------------------------
     # Helpers

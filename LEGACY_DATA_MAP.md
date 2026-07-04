@@ -141,7 +141,7 @@ Notation: **→** target entity · **T:** transformation · rows from the 2026-0
 | `main_studentguardianinfo`       | 68,383 | `people.Guardian` + `people.StudentGuardian`      | T: flatten father/mother/guardian columns → one `Guardian` row per person, linked with `relation`; enables the **Parent role** (§18.1) with one guardian ↔ many students. 114 rows are unreferenced → review list.              |
 | `main_studentotherinfo`          |  7,178 | merge into `people.Student`                       | Ethnicity/sport/blood group as nullable typed columns — the 1:1 satellite adds nothing.                                                                                                                                         |
 | `main_studentmedicalinfo`        |      1 | `people.StudentMedicalRecord`                     | Field-level encryption + read-access logging (§17.3).                                                                                                                                                                           |
-| `main_studenttransportationinfo` | 23,101 | `transport.RiderSubscription`                     | Moves to transport module (it is a transport concern).                                                                                                                                                                          |
+| `main_studenttransportationinfo` | 23,101 | `transport.RiderSubscription`                     | Moves to transport module (it is a transport concern). ✅ 23,101 imported (2,456 soft-deleted preserved, 116 station-less).                                                                                                                                                                          |
 | `main_studentdiscountinfo`       | 19,864 | `billing.StandingDiscount`                        | AY-scoped (D2); flat XOR percentage → DB check constraint (D1).                                                                                                                                                                 |
 | `main_pendingstudentphoto`       |  5,833 | `people.PendingPhoto`                             | Grade-pool behaviour (A3) preserved; hard-delete on pairing.                                                                                                                                                                    |
 | `main_staffrole`                 |     28 | `people.StaffRole`                                |                                                                                                                                                                                                                                 |
@@ -166,7 +166,7 @@ Notation: **→** target entity · **T:** transformation · rows from the 2026-0
 
 | Legacy table                       |          Rows | → Target                                   | Notes                   |
 | ---------------------------------- | ------------: | ------------------------------------------ | ----------------------- |
-| `main_homework` / `homeworkfile`   | 6,459 / 1,369 | `homework.Homework` / `HomeworkAttachment` | Files → object storage. |
+| `main_homework` / `homeworkfile`   | 6,459 / 1,369 | `homework.Homework` / `HomeworkAttachment` | Files → object storage. ✅ 6,459 + 1,369 imported (legacy media paths preserved in FileField; media rsync pending). |
 | `main_homeworksubmission` (+files) |             0 | `homework.Submission` (+files)             | Schema-only.            |
 
 ### 4.7 `attendance`
@@ -209,25 +209,25 @@ Notation: **→** target entity · **T:** transformation · rows from the 2026-0
 
 | Legacy table                              |      Rows | → Target                             | Notes                                                                     |
 | ----------------------------------------- | --------: | ------------------------------------ | ------------------------------------------------------------------------- |
-| `library_library`                         |         6 | `library.Library`                    | `preferences` JSON → typed columns (loan_days, fine_rate).                |
-| `library_book` / `bookcopy` / `bookissue` | 0 / 0 / 0 | `library.Book` / `BookCopy` / `Loan` | Schema-only; copy id = accession number preserved as a field, not the PK. |
+| `library_library`                         |         6 | `library.Library`                    | `preferences` JSON → typed columns (observed keys: fine_per_day, fine_on_damage, shared_to → `shared_with` FK). ✅ 6 imported.                |
+| `library_book` / `bookcopy` / `bookissue` | 0 / 0 / 0 | `library.Book` / `BookCopy` / `Loan` | Schema-only; copy id = accession number preserved as a field (unique per school), not the PK. ✅ |
 
 ### 4.12 `transport`
 
 | Legacy table               |  Rows | → Target                   | Notes                                                                      |
 | -------------------------- | ----: | -------------------------- | -------------------------------------------------------------------------- |
-| `main_busstation`          | 1,215 | `transport.BusStation`     | Delete-guarded (X2).                                                       |
-| `main_bustrackonalertinfo` |   476 | `transport.ProximityAlert` | Ephemeral operational data — migrate for continuity, add retention policy. |
+| `main_busstation`          | 1,215 | `transport.BusStation`     | Delete-guarded (X2). ✅ Imported.                                                       |
+| `main_bustrackonalertinfo` |   476 | `transport.ProximityAlert` | Ephemeral operational data — migrate for continuity, add retention policy. ✅ 476 imported (no school column in legacy — derived from subscriber). |
 
 ### 4.13 `communication`
 
 | Legacy table                        |    Rows | → Target                          | Notes                                                        |
 | ----------------------------------- | ------: | --------------------------------- | ------------------------------------------------------------ |
-| `main_notice`                       |     277 | `communication.Notice`            | Push-only by design — keep as default channel pref (§18.14). |
+| `main_notice`                       |     277 | `communication.Notice`            | Push-only by design — keep as default channel pref (§18.14). ✅ 277 imported. |
 | `main_newsevent` / `newseventimage` | 17 / 26 | `communication.NewsPost` / images |                                                              |
 | `main_calendarevent`                |     459 | `communication.CalendarEvent`     |                                                              |
 | `main_smstemplate`                  |     149 | `communication.MessageTemplate`   |                                                              |
-| `main_notificationhistory`          |   6,166 | `communication.DeliveryLog`       | Recipient (role, id) → FK to unified `identity.Account`.     |
+| `main_notificationhistory`          |   6,166 | `communication.DeliveryLog`       | Recipient (role, id) → FK to unified `identity.Account`. ✅ 6,166 imported, 100% recipient-matched; attendance `students_checked_in` now queues rows here.     |
 | `main_noticesa`                     |       0 | `tenants.VendorAnnouncement`      | Merged with splash notice (4.2).                             |
 
 ### 4.14 `inventory` — **undocumented production module**
@@ -235,8 +235,8 @@ Notation: **→** target entity · **T:** transformation · rows from the 2026-0
 | Legacy table                | Rows | → Target                     | Notes                                                                                                                        |
 | --------------------------- | ---: | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `main_inventorycategory`    |    2 | `inventory.Category`         | Nearly-unused in prod but live — must survive.                                                                               |
-| `main_inventoryitem`        |    1 | `inventory.Item`             | `unit`, `reorder_level` kept.                                                                                                |
-| `main_inventorytransaction` |    2 | `inventory.StockTransaction` | `txn_type` int → enum (verify semantics against legacy code in `Cent-New` before ETL); BS date string → `date_bs`+`date_ad`. |
+| `main_inventoryitem`        |    1 | `inventory.Item`             | `unit`, `reorder_level` kept. ✅                                                                                                |
+| `main_inventorytransaction` |    2 | `inventory.StockTransaction` | `txn_type` int → enum (verified vs Cent-New: purchase +, issue −, wastage −, adjustment signed); stock is a derived signed sum. ✅ Imported. |
 
 ### 4.15 `devices` (RFID)
 

@@ -25,6 +25,7 @@ PERMISSION_MODULES: dict[str, str] = {
     "staff": "Staff records",
     "academics": "Academic structure (years, classes, subjects)",
     "examinations": "Examinations & results",
+    "homework": "Homework",
     "attendance": "Attendance",
     "devices": "RFID / biometric devices",
     "billing": "Fees, billing & dues",
