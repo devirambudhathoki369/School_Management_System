@@ -119,7 +119,7 @@ class Command(BaseCommand):
             "--phase",
             choices=[
                 "all", "tenants", "academics", "people", "examinations",
-                "attendance", "devices", "billing", "payroll",
+                "attendance", "devices", "billing", "payroll", "accounting",
             ],
             default="all",
         )
@@ -169,6 +169,11 @@ class Command(BaseCommand):
                     self.import_salary_accruals(legacy)
                 with transaction.atomic():
                     self.import_salary_payments(legacy)
+            if phase in ("all", "accounting"):
+                with transaction.atomic():
+                    self.import_accounting_structure(legacy)
+                with transaction.atomic():
+                    self.import_vouchers(legacy)
         self.stdout.write(self.style.SUCCESS("Import finished."))
 
     # ------------------------------------------------------------------
@@ -1588,6 +1593,225 @@ class Command(BaseCommand):
                     f" {mismatched} line-sum/gross mismatches"
                 )
             )
+
+    # ------------------------------------------------------------------
+    # Phase 9: accounting (fiscal years, ledgers, balances, vouchers)
+    # ------------------------------------------------------------------
+
+    def import_accounting_structure(self, legacy):
+        from apps.accounting.models import FiscalYear, LedgerAccount, OpeningBalance
+
+        schools = IdMap("main_schooladmin")
+        fiscal_years = IdMap("accounting_accountingeconomicyear")
+        ledgers = IdMap("accounting_accountingledger")
+        balances = IdMap("accounting_accountingledgerbalance")
+
+        # fiscal years (per school; second pass links the previous_ey chain)
+        created, previous_links = 0, []
+        for (lid, name, start, end, closed, remarks, school_lid, prev_lid,
+             active) in self._rows(
+            legacy,
+            "SELECT id, name, start_date, end_date, closed, remarks, school_id,"
+            " previous_ey_id, is_active FROM accounting_accountingeconomicyear"
+            " ORDER BY id",
+        ):
+            if lid in fiscal_years or school_lid not in schools:
+                continue
+            fy = FiscalYear.objects.create(
+                school_id=schools[school_lid], name=name, start_date_bs=start,
+                end_date_bs=end, closed=closed, remarks=remarks or "",
+                is_active=active, legacy_id=lid,
+            )
+            fiscal_years.record([(lid, fy.id, "accounting_fiscalyear")])
+            created += 1
+            if prev_lid:
+                previous_links.append((lid, prev_lid))
+        for lid, prev_lid in previous_links:
+            if prev_lid in fiscal_years:
+                FiscalYear.all_objects.filter(id=fiscal_years[lid]).update(
+                    previous_id=fiscal_years[prev_lid]
+                )
+        self._report("fiscal years", created, FiscalYear)
+
+        # chart of accounts (group code FKs the seeded reference table)
+        created = 0
+        for lid, name, group, address, contact, school_lid, active in self._rows(
+            legacy,
+            "SELECT id, name, ledger_group, address, contact, school_id,"
+            " is_active FROM accounting_accountingledger ORDER BY id",
+        ):
+            if lid in ledgers or school_lid not in schools:
+                continue
+            ledger = LedgerAccount.objects.create(
+                school_id=schools[school_lid], name=name[:60], group_id=group,
+                address=(address or "")[:50], contact=(contact or "")[:15],
+                is_active=active, legacy_id=lid,
+            )
+            ledgers.record([(lid, ledger.id, "accounting_ledgeraccount")])
+            created += 1
+        self._report("ledger accounts", created, LedgerAccount)
+
+        # opening balances (1=dr, 2=cr)
+        created, skipped = 0, 0
+        for lid, btype, amount, ledger_lid, fy_lid, active in self._rows(
+            legacy,
+            "SELECT id, balance_type, opening_balance, ledger_id,"
+            " economic_year_id, is_active FROM accounting_accountingledgerbalance"
+            " ORDER BY id",
+        ):
+            if lid in balances:
+                continue
+            ledger_id, fy_id = ledgers.get(ledger_lid), fiscal_years.get(fy_lid)
+            if not (ledger_id and fy_id):
+                skipped += 1
+                continue
+            ledger = LedgerAccount.all_objects.get(id=ledger_id)
+            ob = OpeningBalance.objects.create(
+                school_id=ledger.school_id, ledger_id=ledger_id, fiscal_year_id=fy_id,
+                side="dr" if btype == 1 else "cr", amount=amount or 0,
+                is_active=active, legacy_id=lid,
+            )
+            balances.record([(lid, ob.id, "accounting_openingbalance")])
+            created += 1
+        self._report("opening balances", created, OpeningBalance)
+        if skipped:
+            self.stdout.write(self.style.WARNING(f"  skipped {skipped} unmapped balances"))
+
+    # (entry content types in this dump: 56=journal, 57=income, 58=expense)
+    VOUCHER_SOURCES = (
+        ("income", "accounting_incomeentry", "accounting_incomeparticular", 57),
+        ("expense", "accounting_expenseentry", "accounting_expenseparticular", 58),
+        ("journal", "accounting_journalentry", "accounting_journalparticular", 56),
+    )
+
+    def import_vouchers(self, legacy):
+        from decimal import Decimal
+
+        from apps.accounting.groups import (
+            EXPENSE_VOUCHER_SIDES,
+            INCOME_VOUCHER_SIDES,
+            LEDGER_GROUPS,
+        )
+        from apps.accounting.models import (
+            Voucher,
+            VoucherLine,
+            VoucherSerialCounter,
+        )
+
+        schools = IdMap("main_schooladmin")
+        fiscal_years = IdMap("accounting_accountingeconomicyear")
+        ledgers = IdMap("accounting_accountingledger")
+
+        if Voucher.all_objects.exists():
+            self.stdout.write("vouchers already imported; skipping")
+            return
+
+        ledger_groups = dict(
+            self._rows(legacy, "SELECT id, ledger_group FROM accounting_accountingledger")
+        )
+        side_maps = {"income": INCOME_VOUCHER_SIDES, "expense": EXPENSE_VOUCHER_SIDES}
+        cash_side = {"income": "dr", "expense": "cr"}
+        modes = {1: "cash", 2: "bank"}
+
+        vouchers, lines = [], []
+        skipped, synthesized, needs_review = 0, 0, 0
+        for vtype, entry_table, particular_table, ct_id in self.VOUCHER_SOURCES:
+            creators = self._mine_creators(legacy, object_type_id=ct_id)
+            particulars: dict[int, list] = {}
+            has_header_ledger = vtype != "journal"
+            par_sql = (
+                f"SELECT entry_id, ledger_id, amount, remarks"  # noqa: S608 — fixed table names
+                f"{', type' if vtype == 'journal' else ''}"
+                f" FROM {particular_table} ORDER BY id"
+            )
+            for row in self._rows(legacy, par_sql):
+                particulars.setdefault(row[0], []).append(row[1:])
+            entry_sql = (
+                f"SELECT id, voucher_id, date, remarks, school_id,"  # noqa: S608
+                f" economic_year_id, is_active"
+                f"{', mode, ledger_id' if has_header_ledger else ''}"
+                f" FROM {entry_table} ORDER BY id"
+            )
+            for row in self._rows(legacy, entry_sql):
+                (lid, serial, date_bs, remarks, school_lid, fy_lid, active) = row[:7]
+                mode, header_lid = (row[7], row[8]) if has_header_ledger else (None, None)
+                fy_id = fiscal_years.get(fy_lid)
+                if not (fy_id and school_lid in schools):
+                    skipped += 1
+                    continue
+                voucher = Voucher(
+                    school_id=schools[school_lid], voucher_type=vtype, serial=serial,
+                    date_bs=date_bs or "", fiscal_year_id=fy_id,
+                    cash_ledger_id=ledgers.get(header_lid),
+                    mode=modes.get(mode, ""), remarks=remarks or "",
+                    created_by_id=creators.get(lid), is_active=active, legacy_id=lid,
+                )
+                totals = {"dr": Decimal("0"), "cr": Decimal("0")}
+                header_seen = False
+                for par in particulars.get(lid, []):
+                    ledger_lid, amount, par_remarks = par[0], par[1], par[2]
+                    if vtype == "journal":
+                        side = "dr" if par[3] == 1 else "cr"
+                    else:
+                        category = LEDGER_GROUPS[ledger_groups[ledger_lid]][2]
+                        side = side_maps[vtype][category]
+                        header_seen = header_seen or ledger_lid == header_lid
+                    amount = Decimal(str(amount or 0))
+                    totals[side] += amount
+                    lines.append(
+                        VoucherLine(
+                            voucher=voucher, ledger_id=ledgers[ledger_lid],
+                            side=side, amount=amount, remarks=(par_remarks or "")[:250],
+                        )
+                    )
+                if has_header_ledger and not header_seen and header_lid in ledgers:
+                    # 16 legacy entries (all soft-deleted) never got their
+                    # balancing cash/bank line — synthesize it, flag below
+                    side = cash_side[vtype]
+                    amount = totals["cr" if side == "dr" else "dr"] - totals[side]
+                    lines.append(
+                        VoucherLine(
+                            voucher=voucher, ledger_id=ledgers[header_lid],
+                            side=side, amount=amount, remarks="",
+                        )
+                    )
+                    totals[side] += amount
+                    voucher.needs_review = True
+                    synthesized += 1
+                if totals["dr"] != totals["cr"]:
+                    voucher.needs_review = True
+                needs_review += voucher.needs_review
+                vouchers.append(voucher)
+        Voucher.objects.bulk_create(vouchers, batch_size=BATCH)
+        VoucherLine.objects.bulk_create(lines, batch_size=BATCH)
+
+        # continue legacy numbering: seed counters from the imported maxima
+        counters: dict[tuple, int] = {}
+        for voucher in vouchers:
+            key = (voucher.school_id, voucher.fiscal_year_id, voucher.voucher_type)
+            counters[key] = max(counters.get(key, 0), voucher.serial)
+        VoucherSerialCounter.objects.bulk_create(
+            [
+                VoucherSerialCounter(
+                    school_id=school_id, fiscal_year_id=fy_id,
+                    voucher_type=vtype, last_serial=last,
+                )
+                for (school_id, fy_id, vtype), last in counters.items()
+            ],
+            batch_size=BATCH,
+        )
+        self._report("vouchers", len(vouchers), Voucher)
+        self.stdout.write(
+            f"  voucher lines: {VoucherLine.all_objects.count()}"
+            f" (synthesized balancing lines: {synthesized})"
+        )
+        self.stdout.write(f"  needs_review: {needs_review}; counters: {len(counters)}")
+        self.stdout.write(
+            f"  created_by resolved: "
+            f"{Voucher.all_objects.exclude(created_by=None).count()}"
+        )
+        if skipped:
+            self.stdout.write(self.style.WARNING(f"  skipped {skipped} unmapped entries"))
 
     # ------------------------------------------------------------------
     # Helpers
