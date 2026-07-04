@@ -1,5 +1,7 @@
 from drf_spectacular.utils import extend_schema
+from rest_framework import serializers
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -16,9 +18,22 @@ from .serializers import (
     OpeningBalanceSerializer,
     VoucherSerializer,
 )
-from .services import reports
+from .services import closing, reports
 
 MANAGERS = (Role.ADMIN, Role.STAFF)
+
+
+def require_admin(request):
+    """Year-end operations are the school owner's call, not general staff."""
+    if request.user.role != Role.ADMIN:
+        raise PermissionDenied("Only the school admin can run year-end operations.")
+
+
+class FiscalYearCloseSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=20)
+    start_date_bs = serializers.CharField(max_length=10)
+    end_date_bs = serializers.CharField(max_length=10)
+    retained_ledger = serializers.UUIDField()
 
 
 class LedgerGroupListView(ListAPIView):
@@ -40,6 +55,38 @@ class FiscalYearViewSet(TenantScopedViewSet):
 
     def get_queryset(self):
         return super().get_queryset().order_by("-start_date_bs")
+
+    @extend_schema(
+        summary="Close this fiscal year into a new one",
+        request=FiscalYearCloseSerializer,
+    )
+    @action(detail=True, methods=["post"], url_path="close")
+    def close(self, request, pk=None):
+        require_admin(request)
+        fiscal_year = self.get_object()
+        s = FiscalYearCloseSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        payload = dict(s.validated_data)
+        retained_ledger = LedgerAccount.objects.filter(
+            id=payload.pop("retained_ledger"), school=request.school
+        ).first()
+        if retained_ledger is None:
+            return Response({"error": {"message": "Unknown retained ledger."}}, status=404)
+        new_year = closing.close_fiscal_year(
+            request.school, fiscal_year, payload, retained_ledger
+        )
+        return Response(
+            {"message": f"Fiscal year {fiscal_year.name} closed.",
+             "new_fiscal_year": FiscalYearSerializer(new_year).data},
+            status=201,
+        )
+
+    @extend_schema(summary="Undo this fiscal year's close")
+    @action(detail=True, methods=["post"], url_path="undo-close")
+    def undo_close(self, request, pk=None):
+        require_admin(request)
+        fiscal_year = closing.undo_fiscal_year_close(request.school, self.get_object())
+        return Response({"message": f"Fiscal year {fiscal_year.name} reopened."})
 
 
 class LedgerAccountViewSet(TenantScopedViewSet):
