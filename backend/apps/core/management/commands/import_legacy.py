@@ -120,7 +120,7 @@ class Command(BaseCommand):
             choices=[
                 "all", "tenants", "academics", "people", "examinations",
                 "attendance", "devices", "billing", "payroll", "accounting",
-                "longtail",
+                "longtail", "audit",
             ],
             default="all",
         )
@@ -186,6 +186,9 @@ class Command(BaseCommand):
                     self.import_communication(legacy)
                 with transaction.atomic():
                     self.import_inventory(legacy)
+            if phase in ("all", "audit"):
+                with transaction.atomic():
+                    self.import_audit_archive(legacy)
         self.stdout.write(self.style.SUCCESS("Import finished."))
 
     # ------------------------------------------------------------------
@@ -2188,6 +2191,79 @@ class Command(BaseCommand):
                 )
                 created += 1
         self._report("inventory transactions", created, StockTransaction)
+
+    # ------------------------------------------------------------------
+    # Phase 11: audit archive
+    # ------------------------------------------------------------------
+
+    AUDIT_ACTIONS = {1: "create", 3: "update", 4: "soft_delete"}
+    AUDIT_ACTOR_TYPES = {  # legacy content types for the acting account
+        7: "account_adminaccount",
+        8: "account_staffaccount",
+        9: "account_studentaccount",
+        # 10 = superadminaccount: the vendor has no unified account yet;
+        # archived as a readable actor_label
+    }
+
+    def import_audit_archive(self, legacy):
+        """main_historylog (664k rows) -> audit.AuditEvent, verbatim: original
+        timestamps, changes JSON and IPs. Audited objects keep their LEGACY
+        addressing ("legacy:<app>.<model>" + int id) — imported domain rows
+        carry legacy_id columns, so support queries join naturally."""
+        from apps.audit.models import AuditEvent
+
+        schools = IdMap("main_schooladmin")
+        actor_maps = {
+            ct: IdMap(table) for ct, table in self.AUDIT_ACTOR_TYPES.items()
+        }
+        content_types = {
+            ct_id: f"legacy:{app_label}.{model}"
+            for ct_id, app_label, model in self._rows(
+                legacy, "SELECT id, app_label, model FROM django_content_type"
+            )
+        }
+
+        if AuditEvent.objects.filter(legacy_id__isnull=False).exists():
+            self.stdout.write("audit archive already imported; skipping")
+            return
+
+        rows, unmapped_actors = [], 0
+        with legacy.cursor(name="historylog") as cur:
+            cur.itersize = 20000
+            cur.execute(
+                "SELECT id, user_type_id, user_id, school_id, object_type_id,"
+                " object_id, timestamp, action, changes, ip_address"
+                " FROM main_historylog ORDER BY id"
+            )
+            for (lid, user_ct, user_lid, school_lid, object_ct, object_lid,
+                 at, action, changes, ip_address) in cur:
+                actor_map = actor_maps.get(user_ct)
+                actor_id = actor_map.get(user_lid) if actor_map else None
+                if actor_id is None:
+                    unmapped_actors += 1
+                rows.append(
+                    AuditEvent(
+                        at=at,
+                        actor_id=actor_id,
+                        actor_label="" if actor_id else f"legacy:{user_ct}#{user_lid}",
+                        school_id=schools.get(school_lid),
+                        action=self.AUDIT_ACTIONS.get(action, "update"),
+                        object_table=content_types.get(object_ct, f"legacy:ct{object_ct}"),
+                        object_id=str(object_lid),
+                        changes=changes,
+                        ip_address=str(ip_address) if ip_address else None,
+                        legacy_id=lid,
+                    )
+                )
+                if len(rows) >= 10000:
+                    AuditEvent.objects.bulk_create(rows, batch_size=BATCH)
+                    rows = []
+        AuditEvent.objects.bulk_create(rows, batch_size=BATCH)
+        total = AuditEvent.objects.filter(legacy_id__isnull=False).count()
+        self.stdout.write(self.style.SUCCESS(f"[audit archive] imported {total}"))
+        self.stdout.write(
+            f"  actors unmatched (mostly vendor superadmins): {unmapped_actors}"
+        )
 
     # ------------------------------------------------------------------
     # Helpers
