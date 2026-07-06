@@ -4,6 +4,7 @@ import { useAuth } from '../lib/auth'
 import {
   IconBilling,
   IconDashboard,
+  IconLayers,
   IconLogout,
   IconMenu,
   IconStudents,
@@ -51,6 +52,12 @@ const NAV_SECTIONS: NavSection[] = [
         to: '/billing',
         icon: IconBilling,
         needs: ['billing.view', 'billing.manage'],
+      },
+      {
+        label: 'Accounting',
+        to: '/accounting',
+        icon: IconLayers,
+        needs: ['accounting.view', 'accounting.manage'],
       },
     ],
   },

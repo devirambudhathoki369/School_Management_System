@@ -6,12 +6,14 @@ from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
+from apps.core.reports import DashboardView
 from apps.core.views import CalendarView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("health/", include("apps.core.urls")),
     path("api/v1/meta/calendar/", CalendarView.as_view(), name="meta-calendar"),
+    path("api/v1/reports/dashboard/", DashboardView.as_view(), name="reports-dashboard"),
     path("api/v1/auth/", include("apps.identity.urls")),
     path("api/v1/academics/", include("apps.academics.urls")),
     path("api/v1/people/", include("apps.people.urls")),

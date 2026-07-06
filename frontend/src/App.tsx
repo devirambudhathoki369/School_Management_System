@@ -9,6 +9,12 @@ import ReceiptsPage from './pages/billing/ReceiptsPage'
 import FeesPage from './pages/billing/FeesPage'
 import BatchesPage from './pages/billing/BatchesPage'
 import DiscountsPage from './pages/billing/DiscountsPage'
+import AccountingLayout from './pages/accounting/AccountingLayout'
+import VouchersPage from './pages/accounting/VouchersPage'
+import NewVoucherPage from './pages/accounting/NewVoucherPage'
+import TrialBalancePage from './pages/accounting/TrialBalancePage'
+import StatementPage from './pages/accounting/StatementPage'
+import LedgersPage from './pages/accounting/LedgersPage'
 import { useAuth } from './lib/auth'
 
 function RequireAuth() {
@@ -43,6 +49,14 @@ export default function App() {
             <Route path="fees" element={<FeesPage />} />
             <Route path="batches" element={<BatchesPage />} />
             <Route path="discounts" element={<DiscountsPage />} />
+          </Route>
+          <Route path="/accounting" element={<AccountingLayout />}>
+            <Route index element={<Navigate to="vouchers" replace />} />
+            <Route path="vouchers" element={<VouchersPage />} />
+            <Route path="new" element={<NewVoucherPage />} />
+            <Route path="trial-balance" element={<TrialBalancePage />} />
+            <Route path="statement" element={<StatementPage />} />
+            <Route path="ledgers" element={<LedgersPage />} />
           </Route>
         </Route>
       </Route>
