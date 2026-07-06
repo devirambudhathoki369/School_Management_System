@@ -77,7 +77,9 @@ class StandingDiscountViewSet(TenantScopedViewSet):
 class ChargeBatchViewSet(TenantScopedViewSet):
     """Creating a batch generates one charge per running student (M8)."""
 
-    queryset = ChargeBatch.objects.select_related("class_info", "academic_year")
+    queryset = ChargeBatch.objects.select_related(
+        "class_info__course", "class_info__section", "academic_year"
+    ).order_by("-created_at")
     serializer_class = ChargeBatchSerializer
     allowed_roles = MANAGERS
     permission_code = "billing"

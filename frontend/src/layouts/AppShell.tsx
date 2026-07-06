@@ -1,6 +1,13 @@
-import { useState } from 'react'
+import { useState, type ComponentType } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
+import {
+  IconBilling,
+  IconDashboard,
+  IconLogout,
+  IconMenu,
+  IconStudents,
+} from '../components/icons'
 
 /**
  * Application frame, responsive by construction:
@@ -12,13 +19,18 @@ import { useAuth } from '../lib/auth'
  * server-side — hiding is UX, not security.
  */
 
-type NavItem = { label: string; to: string; icon: string; needs?: string[] }
+type NavItem = {
+  label: string
+  to: string
+  icon: ComponentType<{ size?: number }>
+  needs?: string[]
+}
 type NavSection = { title: string; items: NavItem[] }
 
 const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Overview',
-    items: [{ label: 'Dashboard', to: '/dashboard', icon: '▦' }],
+    items: [{ label: 'Dashboard', to: '/dashboard', icon: IconDashboard }],
   },
   {
     title: 'People',
@@ -26,13 +38,24 @@ const NAV_SECTIONS: NavSection[] = [
       {
         label: 'Students',
         to: '/students',
-        icon: '◉',
+        icon: IconStudents,
         needs: ['students.view', 'students.manage'],
       },
     ],
   },
+  {
+    title: 'Finance',
+    items: [
+      {
+        label: 'Billing',
+        to: '/billing',
+        icon: IconBilling,
+        needs: ['billing.view', 'billing.manage'],
+      },
+    ],
+  },
   // Modules land here as they are built: Academics, Examinations,
-  // Attendance, Billing, Accounting, Library, Transport, Communication.
+  // Attendance, Payroll, Accounting, Library, Transport, Communication.
 ]
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
@@ -75,7 +98,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                     }`
                   }
                 >
-                  <span aria-hidden>{item.icon}</span>
+                  <item.icon size={18} aria-hidden />
                   {item.label}
                 </NavLink>
               ))}
@@ -92,8 +115,11 @@ export default function AppShell() {
   const location = useLocation()
   const navigate = useNavigate()
   const { account, logout } = useAuth()
+  // Longest matching prefix so nested module routes keep their title.
   const title =
-    NAV_SECTIONS.flatMap((s) => s.items).find((i) => i.to === location.pathname)?.label ?? ''
+    NAV_SECTIONS.flatMap((s) => s.items)
+      .filter((i) => location.pathname === i.to || location.pathname.startsWith(`${i.to}/`))
+      .sort((a, b) => b.to.length - a.to.length)[0]?.label ?? ''
 
   async function onLogout() {
     await logout()
@@ -126,7 +152,7 @@ export default function AppShell() {
             className="flex size-11 items-center justify-center rounded-lg text-ink-muted hover:bg-surface-sunken lg:hidden"
             onClick={() => setDrawerOpen(true)}
           >
-            ☰
+            <IconMenu size={20} />
           </button>
           <h1 className="truncate text-base font-semibold sm:text-lg">{title}</h1>
           <div className="ml-auto flex items-center gap-3">
@@ -135,9 +161,10 @@ export default function AppShell() {
             </span>
             <button
               onClick={onLogout}
-              className="flex min-h-10 items-center rounded-lg border border-border px-3 text-sm font-medium text-ink-muted hover:bg-surface-sunken"
+              className="flex min-h-10 items-center gap-2 rounded-lg border border-border px-3 text-sm font-medium text-ink-muted hover:bg-surface-sunken"
             >
-              Sign out
+              <IconLogout size={16} />
+              <span className="hidden sm:inline">Sign out</span>
             </button>
           </div>
         </header>

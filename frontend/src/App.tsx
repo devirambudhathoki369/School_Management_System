@@ -3,6 +3,12 @@ import AppShell from './layouts/AppShell'
 import DashboardPage from './pages/DashboardPage'
 import LoginPage from './pages/LoginPage'
 import StudentsPage from './pages/StudentsPage'
+import BillingLayout from './pages/billing/BillingLayout'
+import CollectPage from './pages/billing/CollectPage'
+import ReceiptsPage from './pages/billing/ReceiptsPage'
+import FeesPage from './pages/billing/FeesPage'
+import BatchesPage from './pages/billing/BatchesPage'
+import DiscountsPage from './pages/billing/DiscountsPage'
 import { useAuth } from './lib/auth'
 
 function RequireAuth() {
@@ -30,6 +36,14 @@ export default function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/students" element={<StudentsPage />} />
+          <Route path="/billing" element={<BillingLayout />}>
+            <Route index element={<Navigate to="collect" replace />} />
+            <Route path="collect" element={<CollectPage />} />
+            <Route path="receipts" element={<ReceiptsPage />} />
+            <Route path="fees" element={<FeesPage />} />
+            <Route path="batches" element={<BatchesPage />} />
+            <Route path="discounts" element={<DiscountsPage />} />
+          </Route>
         </Route>
       </Route>
     </Routes>

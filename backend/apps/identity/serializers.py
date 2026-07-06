@@ -7,11 +7,31 @@ from .models import Account, Role
 
 class AccountSerializer(serializers.ModelSerializer):
     permissions = serializers.SerializerMethodField()
+    school = serializers.SerializerMethodField()
 
     class Meta:
         model = Account
-        fields = ["id", "username", "role", "email", "verified", "last_login", "permissions"]
+        fields = [
+            "id", "username", "role", "email", "verified", "last_login",
+            "permissions", "school",
+        ]
         read_only_fields = fields
+
+    def get_school(self, account) -> dict | None:
+        """Letterhead facts for the account's tenant (receipt/report headers).
+        PAN goes on every IRD-relevant printout, so it ships with the session."""
+        from apps.tenants.services import resolve_school_for
+
+        school = resolve_school_for(account)
+        if school is None:
+            return None
+        return {
+            "id": str(school.id),
+            "name": school.name,
+            "address": school.address,
+            "contact": school.contact,
+            "pan_no": school.pan_no,
+        }
 
     def get_permissions(self, account) -> list[str]:
         """Module permissions driving the UI; enforcement is server-side."""

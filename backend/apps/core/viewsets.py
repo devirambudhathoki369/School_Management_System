@@ -29,7 +29,13 @@ class TenantScopedViewSet(viewsets.ModelViewSet):
         request.school = school
 
     def get_queryset(self):
-        return super().get_queryset().filter(school=self.request.school)
+        qs = super().get_queryset().filter(school=self.request.school)
+        # Deterministic pagination: an unordered queryset repeats/drops rows
+        # across pages. UUIDv7 ids are time-ordered, so this is creation
+        # order; subclasses may override with their own order_by.
+        if not qs.ordered:
+            qs = qs.order_by("id")
+        return qs
 
     def perform_create(self, serializer):
         serializer.save(school=self.request.school)

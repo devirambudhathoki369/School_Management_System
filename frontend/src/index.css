@@ -20,11 +20,15 @@
   /* Brand accent: light bluish (per product owner) */
   --color-accent: #38bdf8;
   --color-accent-strong: #0284c7;
+  --color-accent-deep: #075985;
   --color-accent-soft: #e0f2fe;
 
   --color-positive: #059669;
+  --color-positive-soft: #ecfdf5;
   --color-warning: #d97706;
+  --color-warning-soft: #fffbeb;
   --color-danger: #dc2626;
+  --color-danger-soft: #fef2f2;
 }
 
 html,
@@ -35,4 +39,25 @@ body,
 
 body {
   @apply bg-surface-muted text-ink antialiased;
+}
+
+/*
+ * Printing: receipts render into #print-root (a portal target); on paper the
+ * app chrome disappears and only the receipt remains. On screen the portal
+ * is invisible.
+ */
+#print-root {
+  display: none;
+}
+
+@media print {
+  body:has(#print-root:not(:empty)) #root {
+    display: none;
+  }
+  #print-root {
+    display: block;
+  }
+  @page {
+    margin: 12mm;
+  }
 }

@@ -18,6 +18,14 @@ import { api, setAccessToken } from './api'
 
 export type Role = 'super_admin' | 'admin' | 'staff' | 'student' | 'guardian'
 
+export interface SchoolInfo {
+  id: string
+  name: string
+  address: string
+  contact: string
+  pan_no: string
+}
+
 export interface Account {
   id: string
   username: string
@@ -25,6 +33,7 @@ export interface Account {
   email: string
   verified: boolean
   permissions: string[]
+  school: SchoolInfo | null
 }
 
 interface AuthState {

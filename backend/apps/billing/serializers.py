@@ -95,12 +95,14 @@ class ChargeSerializer(serializers.ModelSerializer):
 class ChargeBatchSerializer(TenantChildValidationMixin, serializers.ModelSerializer):
     tenant_fields = ("academic_year", "class_info")
     charge_count = serializers.IntegerField(source="charges.count", read_only=True)
+    class_label = serializers.CharField(source="class_info.__str__", read_only=True)
+    academic_year_name = serializers.CharField(source="academic_year.name", read_only=True)
 
     class Meta:
         model = ChargeBatch
         fields = [
-            "id", "date_bs", "months", "academic_year", "billing_year",
-            "class_info", "remarks", "charge_count",
+            "id", "date_bs", "months", "academic_year", "academic_year_name",
+            "billing_year", "class_info", "class_label", "remarks", "charge_count",
         ]
         read_only_fields = ["id"]
 
@@ -127,19 +129,24 @@ class PaymentSerializer(TenantChildValidationMixin, serializers.ModelSerializer)
     tenant_fields = ("student", "academic_year")
     lines = PaymentLineSerializer(many=True)
     receipt_no = serializers.SerializerMethodField()
+    student_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Payment
         fields = [
             "id", "kind", "serial", "legacy_serial", "receipt_no", "date_bs",
-            "student", "class_info", "academic_year", "billing_year",
-            "payment_month", "mode", "total_paid", "total_discount",
-            "total_due", "remarks", "payer_name", "payer_address", "lines",
+            "student", "student_name", "class_info", "academic_year",
+            "billing_year", "payment_month", "mode", "total_paid",
+            "total_discount", "total_due", "remarks", "payer_name",
+            "payer_address", "lines",
         ]
         read_only_fields = ["id", "serial", "legacy_serial", "class_info", "total_paid"]
 
     def get_receipt_no(self, payment) -> int | None:
         return payment.serial or payment.legacy_serial
+
+    def get_student_name(self, payment) -> str | None:
+        return payment.student.full_name if payment.student_id else None
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
