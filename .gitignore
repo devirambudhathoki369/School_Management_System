@@ -17,7 +17,12 @@ htmlcov/
 backend/.env
 backend/media/
 backend/staticfiles/
+
+# Local databases — never commit data
 db.sqlite3
+*.sqlite3
+postgres_data/
+pg_data/
 
 # Node
 node_modules/
@@ -29,6 +34,11 @@ frontend/.env.local
 .idea/
 *.swp
 .DS_Store
+
+# Claude Code local state
+.claude/
+settings.local.json
+settings.local.json.tmp.*
 
 # Compose secrets
 /.env
