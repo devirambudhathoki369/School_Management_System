@@ -97,11 +97,14 @@ class GradingSchemeSerializer(serializers.ModelSerializer):
 class StudentMarkSerializer(serializers.ModelSerializer):
     """total/passed are always computed server-side (never client input)."""
 
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+    roll_no = serializers.CharField(source="student.roll_no", read_only=True)
+
     class Meta:
         model = StudentSubjectResult
         fields = [
-            "id", "student", "theory", "practical", "total", "inclusion",
-            "attendance_days", "passed", "absent",
+            "id", "student", "student_name", "roll_no", "theory", "practical",
+            "total", "inclusion", "attendance_days", "passed", "absent",
             "position_in_section", "position_in_class",
         ]
         read_only_fields = ["id", "total", "passed", "position_in_section", "position_in_class"]

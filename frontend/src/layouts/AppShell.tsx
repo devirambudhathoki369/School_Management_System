@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import {
   IconBilling,
+  IconClipboard,
   IconDashboard,
   IconLayers,
   IconLogout,
@@ -42,6 +43,17 @@ const NAV_SECTIONS: NavSection[] = [
         to: '/students',
         icon: IconStudents,
         needs: ['students.view', 'students.manage'],
+      },
+    ],
+  },
+  {
+    title: 'Academics',
+    items: [
+      {
+        label: 'Examinations',
+        to: '/exams',
+        icon: IconClipboard,
+        needs: ['examinations.view', 'examinations.manage'],
       },
     ],
   },

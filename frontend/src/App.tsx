@@ -15,6 +15,12 @@ import NewVoucherPage from './pages/accounting/NewVoucherPage'
 import TrialBalancePage from './pages/accounting/TrialBalancePage'
 import StatementPage from './pages/accounting/StatementPage'
 import LedgersPage from './pages/accounting/LedgersPage'
+import ExamsLayout from './pages/exams/ExamsLayout'
+import ExamsPage from './pages/exams/ExamsPage'
+import SheetsPage from './pages/exams/SheetsPage'
+import MarksPage from './pages/exams/MarksPage'
+import SchedulePage from './pages/exams/SchedulePage'
+import GradingPage from './pages/exams/GradingPage'
 import PayrollLayout from './pages/payroll/PayrollLayout'
 import PaySalaryPage from './pages/payroll/PaySalaryPage'
 import RunPayrollPage from './pages/payroll/RunPayrollPage'
@@ -64,6 +70,14 @@ export default function App() {
             <Route path="trial-balance" element={<TrialBalancePage />} />
             <Route path="statement" element={<StatementPage />} />
             <Route path="ledgers" element={<LedgersPage />} />
+          </Route>
+          <Route path="/exams" element={<ExamsLayout />}>
+            <Route index element={<Navigate to="list" replace />} />
+            <Route path="list" element={<ExamsPage />} />
+            <Route path="sheets" element={<SheetsPage />} />
+            <Route path="sheets/:sheetId/marks" element={<MarksPage />} />
+            <Route path="schedule" element={<SchedulePage />} />
+            <Route path="grading" element={<GradingPage />} />
           </Route>
           <Route path="/payroll" element={<PayrollLayout />}>
             <Route index element={<Navigate to="pay" replace />} />

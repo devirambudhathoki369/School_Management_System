@@ -129,6 +129,7 @@ class SubjectViewSet(TenantScopedViewSet):
     serializer_class = SubjectSerializer
     allowed_roles = MANAGERS
     permission_code = "academics"
+    filterset_fields = ["class_info"]
 
     def perform_destroy(self, instance):
         # S2 hard lock, then S1 usage guard.

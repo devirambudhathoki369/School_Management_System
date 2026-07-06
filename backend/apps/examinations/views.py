@@ -95,6 +95,25 @@ class SubjectResultSheetViewSet(TenantScopedViewSet):
         rows = sheet.results.select_related("student").order_by("student__first_name")
         return Response(StudentMarkSerializer(rows, many=True).data)
 
+    @extend_schema(summary="Class roster for marks entry (names only)")
+    @action(detail=True, methods=["get"], url_path="roster")
+    def roster(self, request, pk=None):
+        """The sheet's class list under the EXAMINATIONS permission — marks
+        clerks need names/rolls to fill a sheet but usually hold no grant on
+        the students module."""
+        from apps.people.models import Student
+
+        sheet = self.get_object()
+        students = Student.objects.filter(
+            school=request.school,
+            class_info=sheet.class_info,
+            status=Student.Status.RUNNING,
+        ).order_by("first_name", "last_name")
+        return Response([
+            {"id": str(s.id), "full_name": s.full_name, "roll_no": s.roll_no}
+            for s in students
+        ])
+
     @extend_schema(summary="Bulk-upsert marks (totals/pass computed server-side)")
     @action(detail=True, methods=["put"], url_path="marks/entry")
     def marks_entry(self, request, pk=None):
