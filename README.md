@@ -65,3 +65,4 @@ frontend/
 - Every financial write is transactional and lands in explicit line tables.
 - Every endpoint is versioned (`/api/v1/…`) and typed via the OpenAPI schema.
 - Mobile-first: every screen must work at 360 px before it ships.
+# School_Management_System
