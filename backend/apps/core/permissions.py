@@ -14,7 +14,7 @@ Legacy note: imported staff carry the old numeric permission codes; those
 grant nothing here until translated/assigned — new-system access is opt-in.
 """
 
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 from apps.identity.models import Role
 
@@ -86,10 +86,11 @@ class ModulePermissionAllowed(BasePermission):
         if profile is None:
             return False
         granted = set(profile.permissions or [])
+        # Viewsets expose .action; plain APIViews fall back to the HTTP
+        # method. Anything unrecognised stays a write (fail closed).
         action = getattr(view, "action", None)
+        is_read = action in READ_ACTIONS if action else request.method in SAFE_METHODS
         needed = (
-            {f"{code}.view", f"{code}.manage"}
-            if action in READ_ACTIONS
-            else {f"{code}.manage"}
+            {f"{code}.view", f"{code}.manage"} if is_read else {f"{code}.manage"}
         )
         return bool(granted & needed)

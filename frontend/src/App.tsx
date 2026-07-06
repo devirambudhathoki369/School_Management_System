@@ -15,6 +15,10 @@ import NewVoucherPage from './pages/accounting/NewVoucherPage'
 import TrialBalancePage from './pages/accounting/TrialBalancePage'
 import StatementPage from './pages/accounting/StatementPage'
 import LedgersPage from './pages/accounting/LedgersPage'
+import AttendanceLayout from './pages/attendance/AttendanceLayout'
+import MarkClassPage from './pages/attendance/MarkClassPage'
+import DayOverviewPage from './pages/attendance/DayOverviewPage'
+import StaffAttendancePage from './pages/attendance/StaffAttendancePage'
 import ExamsLayout from './pages/exams/ExamsLayout'
 import ExamsPage from './pages/exams/ExamsPage'
 import SheetsPage from './pages/exams/SheetsPage'
@@ -70,6 +74,12 @@ export default function App() {
             <Route path="trial-balance" element={<TrialBalancePage />} />
             <Route path="statement" element={<StatementPage />} />
             <Route path="ledgers" element={<LedgersPage />} />
+          </Route>
+          <Route path="/attendance" element={<AttendanceLayout />}>
+            <Route index element={<Navigate to="mark" replace />} />
+            <Route path="mark" element={<MarkClassPage />} />
+            <Route path="day" element={<DayOverviewPage />} />
+            <Route path="staff" element={<StaffAttendancePage />} />
           </Route>
           <Route path="/exams" element={<ExamsLayout />}>
             <Route index element={<Navigate to="list" replace />} />
