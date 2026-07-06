@@ -8,6 +8,7 @@ import {
   IconLogout,
   IconMenu,
   IconStudents,
+  IconWallet,
 } from '../components/icons'
 
 /**
@@ -58,6 +59,12 @@ const NAV_SECTIONS: NavSection[] = [
         to: '/accounting',
         icon: IconLayers,
         needs: ['accounting.view', 'accounting.manage'],
+      },
+      {
+        label: 'Payroll',
+        to: '/payroll',
+        icon: IconWallet,
+        needs: ['payroll.view', 'payroll.manage'],
       },
     ],
   },

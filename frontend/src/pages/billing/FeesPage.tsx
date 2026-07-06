@@ -9,7 +9,7 @@ import {
   type FeeSchedule,
   type FeeTitle,
 } from '../../lib/billing'
-import { BS_MONTHS, bsMonthName, formatMoney } from '../../lib/format'
+import { BS_MONTHS, bsMonthName, bsMonthShort, formatMoney } from '../../lib/format'
 import {
   AmountInput,
   Badge,
@@ -191,7 +191,7 @@ function TitleModal({ title, onClose }: { title: FeeTitle | null; onClose: () =>
                       : 'border-border text-ink-muted hover:border-accent'
                   }`}
                 >
-                  {label.slice(0, 3)}
+                  {bsMonthShort(value)}
                 </button>
               )
             })}

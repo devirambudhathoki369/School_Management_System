@@ -15,6 +15,13 @@ import NewVoucherPage from './pages/accounting/NewVoucherPage'
 import TrialBalancePage from './pages/accounting/TrialBalancePage'
 import StatementPage from './pages/accounting/StatementPage'
 import LedgersPage from './pages/accounting/LedgersPage'
+import PayrollLayout from './pages/payroll/PayrollLayout'
+import PaySalaryPage from './pages/payroll/PaySalaryPage'
+import RunPayrollPage from './pages/payroll/RunPayrollPage'
+import PaymentsPage from './pages/payroll/PaymentsPage'
+import PostingsPage from './pages/payroll/PostingsPage'
+import LedgerPage from './pages/payroll/LedgerPage'
+import StructuresPage from './pages/payroll/StructuresPage'
 import { useAuth } from './lib/auth'
 
 function RequireAuth() {
@@ -57,6 +64,15 @@ export default function App() {
             <Route path="trial-balance" element={<TrialBalancePage />} />
             <Route path="statement" element={<StatementPage />} />
             <Route path="ledgers" element={<LedgersPage />} />
+          </Route>
+          <Route path="/payroll" element={<PayrollLayout />}>
+            <Route index element={<Navigate to="pay" replace />} />
+            <Route path="pay" element={<PaySalaryPage />} />
+            <Route path="run" element={<RunPayrollPage />} />
+            <Route path="payments" element={<PaymentsPage />} />
+            <Route path="postings" element={<PostingsPage />} />
+            <Route path="ledger" element={<LedgerPage />} />
+            <Route path="structures" element={<StructuresPage />} />
           </Route>
         </Route>
       </Route>

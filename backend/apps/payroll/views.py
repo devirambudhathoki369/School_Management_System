@@ -1,5 +1,6 @@
 from django.db import transaction
 from drf_spectacular.utils import extend_schema
+from rest_framework import serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -29,6 +30,34 @@ def _get_staff(request):
     if staff is None:
         return None, Response({"error": {"message": "Unknown staff."}}, status=404)
     return staff, None
+
+
+class StaffLookupSerializer(serializers.ModelSerializer):
+    full_name = serializers.CharField(read_only=True)
+    role_name = serializers.CharField(source="role.name", read_only=True)
+
+    class Meta:
+        model = Staff
+        fields = ["id", "full_name", "role_name", "status"]
+
+
+class StaffLookupViewSet(TenantScopedViewSet):
+    """Names-only staff directory for payroll screens. The full staff module
+    is admin-only; a payroll clerk still has to pick who to pay, so this
+    exposes exactly the label fields under the payroll permission."""
+
+    queryset = Staff.objects.select_related("role")
+    serializer_class = StaffLookupSerializer
+    allowed_roles = MANAGERS
+    permission_code = "payroll"
+    http_method_names = ["get", "head", "options"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        status = self.request.query_params.get("status")
+        if status:
+            qs = qs.filter(status=status)
+        return qs.order_by("first_name", "last_name")
 
 
 class SalaryStructureViewSet(TenantScopedViewSet):

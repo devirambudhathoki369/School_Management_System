@@ -49,8 +49,18 @@ export const BS_MONTHS = [
   'Chaitra',
 ] as const
 
+/** Distinct short forms — plain 3-letter truncation collides
+ *  (Ashadh/Ashwin would both read "Ash"). */
+export const BS_MONTHS_SHORT = [
+  'Bai', 'Jes', 'Asar', 'Shra', 'Bha', 'Aswin', 'Kar', 'Man', 'Pou', 'Mag', 'Fal', 'Cha',
+] as const
+
 export function bsMonthName(month: number): string {
   return BS_MONTHS[month - 1] ?? `Month ${month}`
+}
+
+export function bsMonthShort(month: number): string {
+  return BS_MONTHS_SHORT[month - 1] ?? `M${month}`
 }
 
 /** "2082-03-21" -> "21 Ashadh 2082" for headers and receipts. */

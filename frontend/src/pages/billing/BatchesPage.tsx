@@ -10,7 +10,7 @@ import {
   type ChargeBatch,
   type Paginated,
 } from '../../lib/billing'
-import { BS_MONTHS, bsMonthName, formatDateBS } from '../../lib/format'
+import { BS_MONTHS, bsMonthName, bsMonthShort, formatDateBS } from '../../lib/format'
 import {
   Badge,
   Button,
@@ -215,7 +215,7 @@ function RunModal({ onClose }: { onClose: () => void }) {
                       : 'border-border text-ink-muted hover:border-accent'
                   }`}
                 >
-                  {label.slice(0, 3)}
+                  {bsMonthShort(i + 1)}
                 </button>
               )
             })}

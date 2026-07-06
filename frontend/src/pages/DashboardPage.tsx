@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { bsMonthName, formatDateBS, formatMoney, formatReceiptNo } from '../lib/format'
+import { bsMonthName, bsMonthShort, formatDateBS, formatMoney, formatReceiptNo } from '../lib/format'
 import { Badge, Money, Skeleton, StatCard } from '../components/ui'
 import {
   IconArrowRight,
@@ -331,7 +331,7 @@ function TrendChart({ points }: { points: TrendPoint[] }) {
                 textAnchor="middle"
                 className={`text-[11px] ${hover === i ? 'fill-ink font-medium' : 'fill-ink-muted'}`}
               >
-                {bsMonthName(p.month).slice(0, 3)}
+                {bsMonthShort(p.month)}
               </text>
             </g>
           )
