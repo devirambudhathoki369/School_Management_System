@@ -123,6 +123,22 @@ class ClassInfoViewSet(TenantScopedViewSet):
     permission_code = "academics"
     filterset_fields = ["academic_year", "education_level", "grade"]
 
+    def get_queryset(self):
+        from django.db.models import Count, Q
+
+        return super().get_queryset().annotate(
+            students_count=Count(
+                "students", filter=Q(students__status="running", students__is_active=True)
+            )
+        )
+
+    def perform_destroy(self, instance):
+        if instance.students.exists():
+            raise ValidationError("Class has students and cannot be deleted.")
+        if instance.subjects.exists():
+            raise ValidationError("Class has subjects and cannot be deleted.")
+        instance.soft_delete()
+
 
 class SubjectViewSet(TenantScopedViewSet):
     queryset = Subject.objects.select_related("class_info")

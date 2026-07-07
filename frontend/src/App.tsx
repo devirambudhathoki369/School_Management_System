@@ -2,7 +2,15 @@ import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import AppShell from './layouts/AppShell'
 import DashboardPage from './pages/DashboardPage'
 import LoginPage from './pages/LoginPage'
-import StudentsPage from './pages/StudentsPage'
+import PeopleLayout from './pages/people/PeopleLayout'
+import StudentsPage from './pages/people/StudentsPage'
+import StudentProfilePage from './pages/people/StudentProfilePage'
+import StaffPage from './pages/people/StaffPage'
+import AcademicsLayout from './pages/academics/AcademicsLayout'
+import ClassesPage from './pages/academics/ClassesPage'
+import SubjectsPage from './pages/academics/SubjectsPage'
+import StructurePage from './pages/academics/StructurePage'
+import YearsPage from './pages/academics/YearsPage'
 import BillingLayout from './pages/billing/BillingLayout'
 import CollectPage from './pages/billing/CollectPage'
 import ReceiptsPage from './pages/billing/ReceiptsPage'
@@ -58,7 +66,20 @@ export default function App() {
         <Route element={<AppShell />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/students" element={<StudentsPage />} />
+          <Route path="/students" element={<Navigate to="/people/students" replace />} />
+          <Route path="/people" element={<PeopleLayout />}>
+            <Route index element={<Navigate to="students" replace />} />
+            <Route path="students" element={<StudentsPage />} />
+            <Route path="students/:studentId" element={<StudentProfilePage />} />
+            <Route path="staff" element={<StaffPage />} />
+          </Route>
+          <Route path="/academics" element={<AcademicsLayout />}>
+            <Route index element={<Navigate to="classes" replace />} />
+            <Route path="classes" element={<ClassesPage />} />
+            <Route path="subjects" element={<SubjectsPage />} />
+            <Route path="structure" element={<StructurePage />} />
+            <Route path="years" element={<YearsPage />} />
+          </Route>
           <Route path="/billing" element={<BillingLayout />}>
             <Route index element={<Navigate to="collect" replace />} />
             <Route path="collect" element={<CollectPage />} />

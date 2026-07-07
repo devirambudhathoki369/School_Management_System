@@ -16,6 +16,17 @@ class CurrentYearPointerSerializer(serializers.ModelSerializer):
         fields = ["id", "key", "academic_year", "previous_academic_year"]
         read_only_fields = ["id"]
 
+    def validate(self, attrs):
+        request = self.context.get("request")
+        if request is not None:
+            for field in ("academic_year", "previous_academic_year"):
+                value = attrs.get(field)
+                if value is not None and value.school_id != request.school.id:
+                    raise serializers.ValidationError(
+                        {field: "Does not belong to your school."}
+                    )
+        return attrs
+
 
 class CourseSerializer(serializers.ModelSerializer):
     class Meta:
@@ -33,14 +44,31 @@ class SectionSerializer(serializers.ModelSerializer):
 
 class ClassInfoSerializer(serializers.ModelSerializer):
     label = serializers.CharField(source="__str__", read_only=True)
+    students_count = serializers.SerializerMethodField()
 
     class Meta:
         model = ClassInfo
         fields = [
             "id", "education_level", "grade", "faculty", "course", "section",
             "year", "semester", "display_name", "academic_year", "label",
+            "students_count",
         ]
         read_only_fields = ["id"]
+
+    def get_students_count(self, obj) -> int:
+        # Annotated on the viewset queryset; 0 when built from a bare instance.
+        return getattr(obj, "students_count", 0)
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        if request is not None:
+            for field in ("course", "section", "academic_year"):
+                value = attrs.get(field)
+                if value is not None and value.school_id != request.school.id:
+                    raise serializers.ValidationError(
+                        {field: "Does not belong to your school."}
+                    )
+        return attrs
 
 
 class SubjectSerializer(serializers.ModelSerializer):
