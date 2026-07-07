@@ -233,6 +233,59 @@ export const IconGraduate = make(
   </>,
 )
 
+export const IconMegaphone = make(
+  <>
+    <path d="m3 11 18-5v12L3 14v-3z" />
+    <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+  </>,
+)
+
+export const IconBus = make(
+  <>
+    <path d="M4 6 2 7" />
+    <path d="M10 6h4" />
+    <path d="m22 7-2-1" />
+    <rect width="16" height="16" x="4" y="3" rx="2" />
+    <path d="M4 11h16" />
+    <path d="M8 15h.01" />
+    <path d="M16 15h.01" />
+    <path d="M6 19v2" />
+    <path d="M18 21v-2" />
+  </>,
+)
+
+export const IconPackage = make(
+  <>
+    <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+    <path d="m3.3 7 8.7 5 8.7-5" />
+    <path d="M12 22V12" />
+  </>,
+)
+
+export const IconLibrary = make(
+  <>
+    <path d="m16 6 4 14" />
+    <path d="M12 6v14" />
+    <path d="M8 8v12" />
+    <path d="M4 4v16" />
+  </>,
+)
+
+export const IconNotebook = make(
+  <>
+    <path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4" />
+    <path d="M2 6h4" />
+    <path d="M2 10h4" />
+    <path d="M2 14h4" />
+    <path d="M2 18h4" />
+    <path d="M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z" />
+  </>,
+)
+
+export const IconPaperclip = make(
+  <path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551" />,
+)
+
 export const IconSpinner = ({ size = 18, ...props }: IconProps) => (
   <svg
     width={size}

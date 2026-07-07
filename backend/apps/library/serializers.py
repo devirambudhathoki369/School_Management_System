@@ -57,14 +57,22 @@ class BookCopySerializer(TenantChildValidationMixin, serializers.ModelSerializer
 
 class LoanSerializer(TenantChildValidationMixin, serializers.ModelSerializer):
     tenant_fields = ("copy", "student", "staff")
+    book_title = serializers.CharField(source="copy.book.title", read_only=True)
+    copy_accession = serializers.IntegerField(source="copy.accession_no", read_only=True)
+    borrower_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Loan
         fields = [
-            "id", "copy", "student", "staff", "issued_date_bs", "due_date_bs",
+            "id", "copy", "book_title", "copy_accession", "student", "staff",
+            "borrower_name", "issued_date_bs", "due_date_bs",
             "returned_date_bs", "fine_amount", "remarks",
         ]
         read_only_fields = ["id"]
+
+    def get_borrower_name(self, loan) -> str:
+        person = loan.student or loan.staff
+        return person.full_name if person else ""
 
     def validate(self, attrs):
         attrs = super().validate(attrs)

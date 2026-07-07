@@ -11,6 +11,22 @@ import ClassesPage from './pages/academics/ClassesPage'
 import SubjectsPage from './pages/academics/SubjectsPage'
 import StructurePage from './pages/academics/StructurePage'
 import YearsPage from './pages/academics/YearsPage'
+import HomeworkPage from './pages/homework/HomeworkPage'
+import CommunicationLayout from './pages/communication/CommunicationLayout'
+import NoticesPage from './pages/communication/NoticesPage'
+import CalendarPage from './pages/communication/CalendarPage'
+import TemplatesPage from './pages/communication/TemplatesPage'
+import DeliveriesPage from './pages/communication/DeliveriesPage'
+import LibraryLayout from './pages/library/LibraryLayout'
+import BooksPage from './pages/library/BooksPage'
+import CirculationPage from './pages/library/CirculationPage'
+import LibSettingsPage from './pages/library/LibSettingsPage'
+import TransportLayout from './pages/transport/TransportLayout'
+import StationsPage from './pages/transport/StationsPage'
+import RidersPage from './pages/transport/RidersPage'
+import InventoryLayout from './pages/inventory/InventoryLayout'
+import StockPage from './pages/inventory/StockPage'
+import MovementsPage from './pages/inventory/MovementsPage'
 import BillingLayout from './pages/billing/BillingLayout'
 import CollectPage from './pages/billing/CollectPage'
 import ReceiptsPage from './pages/billing/ReceiptsPage'
@@ -79,6 +95,30 @@ export default function App() {
             <Route path="subjects" element={<SubjectsPage />} />
             <Route path="structure" element={<StructurePage />} />
             <Route path="years" element={<YearsPage />} />
+          </Route>
+          <Route path="/homework" element={<HomeworkPage />} />
+          <Route path="/communication" element={<CommunicationLayout />}>
+            <Route index element={<Navigate to="notices" replace />} />
+            <Route path="notices" element={<NoticesPage />} />
+            <Route path="calendar" element={<CalendarPage />} />
+            <Route path="templates" element={<TemplatesPage />} />
+            <Route path="deliveries" element={<DeliveriesPage />} />
+          </Route>
+          <Route path="/library" element={<LibraryLayout />}>
+            <Route index element={<Navigate to="books" replace />} />
+            <Route path="books" element={<BooksPage />} />
+            <Route path="circulation" element={<CirculationPage />} />
+            <Route path="settings" element={<LibSettingsPage />} />
+          </Route>
+          <Route path="/transport" element={<TransportLayout />}>
+            <Route index element={<Navigate to="stations" replace />} />
+            <Route path="stations" element={<StationsPage />} />
+            <Route path="riders" element={<RidersPage />} />
+          </Route>
+          <Route path="/inventory" element={<InventoryLayout />}>
+            <Route index element={<Navigate to="stock" replace />} />
+            <Route path="stock" element={<StockPage />} />
+            <Route path="movements" element={<MovementsPage />} />
           </Route>
           <Route path="/billing" element={<BillingLayout />}>
             <Route index element={<Navigate to="collect" replace />} />

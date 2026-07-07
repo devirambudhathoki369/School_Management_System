@@ -1,10 +1,46 @@
+from drf_spectacular.utils import extend_schema
+from rest_framework import serializers
+from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
+from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.response import Response
+
 from apps.core.viewsets import TenantScopedViewSet
 from apps.identity.models import Role
+from apps.people.models import Staff
 
-from .models import Homework, Submission
-from .serializers import HomeworkSerializer, SubmissionSerializer
+from .models import Homework, HomeworkAttachment, Submission
+from .serializers import (
+    HomeworkAttachmentSerializer,
+    HomeworkSerializer,
+    SubmissionSerializer,
+)
 
 MANAGERS = (Role.ADMIN, Role.STAFF)
+
+
+class HomeworkStaffLookupSerializer(serializers.ModelSerializer):
+    full_name = serializers.CharField(read_only=True)
+    role_name = serializers.CharField(source="role.name", read_only=True)
+
+    class Meta:
+        model = Staff
+        fields = ["id", "full_name", "role_name", "status"]
+
+
+class HomeworkStaffLookupViewSet(TenantScopedViewSet):
+    """Names-only staff directory under the homework grant (same pattern as
+    payroll's staff-lookup): an admin assigning homework must pick the
+    teacher, but the full staff module is admin-only."""
+
+    queryset = Staff.objects.select_related("role")
+    serializer_class = HomeworkStaffLookupSerializer
+    allowed_roles = MANAGERS
+    permission_code = "homework"
+    http_method_names = ["get", "head", "options"]
+
+    def get_queryset(self):
+        return super().get_queryset().order_by("first_name", "last_name")
 
 
 class HomeworkViewSet(TenantScopedViewSet):
@@ -22,6 +58,44 @@ class HomeworkViewSet(TenantScopedViewSet):
         if self.action == "retrieve":
             qs = qs.prefetch_related("attachments")
         return qs.order_by("-due_date_bs")
+
+    def perform_create(self, serializer):
+        # A teacher posting homework is its author by default; admins (no
+        # staff profile) must name the teacher explicitly.
+        staff = serializer.validated_data.get("staff") or getattr(
+            self.request.user, "staff_profile", None
+        )
+        if staff is None:
+            raise ValidationError({"staff": "Pick the assigning teacher."})
+        serializer.save(school=self.request.school, staff=staff)
+
+    @extend_schema(summary="Attach a file to this homework")
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="attachments",
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def add_attachment(self, request, pk=None):
+        homework = self.get_object()
+        upload = request.FILES.get("file")
+        if upload is None:
+            raise ValidationError({"file": "Attach a file."})
+        attachment = HomeworkAttachment.objects.create(homework=homework, file=upload)
+        return Response(HomeworkAttachmentSerializer(attachment).data, status=201)
+
+    @extend_schema(summary="Remove an attachment")
+    @action(
+        detail=True,
+        methods=["delete"],
+        url_path=r"attachments/(?P<attachment_id>[0-9a-f-]+)",
+    )
+    def remove_attachment(self, request, pk=None, attachment_id=None):
+        attachment = self.get_object().attachments.filter(id=attachment_id).first()
+        if attachment is None:
+            raise ValidationError("Unknown attachment.")
+        attachment.soft_delete()
+        return Response(status=204)
 
 
 class SubmissionViewSet(TenantScopedViewSet):

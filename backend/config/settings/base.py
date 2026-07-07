@@ -10,6 +10,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import environ
+from celery.schedules import crontab
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -205,6 +206,32 @@ CELERY_BROKER_URL = REDIS_URL or None
 CELERY_TASK_ALWAYS_EAGER = not REDIS_URL  # run inline in dev without a broker
 CELERY_TASK_ACKS_LATE = True
 CELERY_TIMEZONE = "Asia/Kathmandu"
+
+# Recurring jobs (the compose `beat` service runs the scheduler). Times are
+# Asia/Kathmandu; housekeeping lands in the dead hours before school opens.
+CELERY_BEAT_SCHEDULE = {
+    "dispatch-queued-deliveries": {
+        # Held (returns 0) until PUSH_PROVIDER names a gateway class.
+        "task": "apps.communication.tasks.dispatch_queued_deliveries",
+        "schedule": crontab(minute="*/5"),
+    },
+    "expire-stale-deliveries": {
+        "task": "apps.communication.tasks.expire_stale_deliveries",
+        "schedule": crontab(hour=2, minute=30),
+    },
+    "flush-expired-tokens": {
+        "task": "apps.identity.tasks.flush_expired_tokens",
+        "schedule": crontab(hour=3, minute=0),
+    },
+    "trim-proximity-alerts": {
+        "task": "apps.transport.tasks.trim_proximity_alerts",
+        "schedule": crontab(hour=3, minute=30),
+    },
+}
+
+# Dotted path of the push/SMS gateway class used by the delivery dispatcher.
+# Empty (the default) holds the queue: rows stay QUEUED, nothing is faked.
+PUSH_PROVIDER = env("PUSH_PROVIDER", default="")
 
 # ---------------------------------------------------------------------------
 # I18n / files / security headers

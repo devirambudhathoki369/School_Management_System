@@ -25,6 +25,8 @@ class HomeworkSerializer(TenantChildValidationMixin, serializers.ModelSerializer
             "subject", "subject_name", "staff", "staff_name", "attachments",
         ]
         read_only_fields = ["id"]
+        # omitted staff defaults to the posting teacher (view supplies it)
+        extra_kwargs = {"staff": {"required": False}}
 
 
 class SubmissionAttachmentSerializer(serializers.ModelSerializer):
