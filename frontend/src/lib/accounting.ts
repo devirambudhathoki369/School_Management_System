@@ -14,6 +14,7 @@ export interface FiscalYear {
   end_date_bs: string
   closed: boolean
   previous: string | null
+  remarks: string
 }
 
 export interface LedgerGroup {

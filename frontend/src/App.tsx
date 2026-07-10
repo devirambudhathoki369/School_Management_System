@@ -38,6 +38,12 @@ import VouchersPage from './pages/accounting/VouchersPage'
 import NewVoucherPage from './pages/accounting/NewVoucherPage'
 import TrialBalancePage from './pages/accounting/TrialBalancePage'
 import { BalanceSheetPage, ProfitLossPage } from './pages/accounting/FinancialStatementsPage'
+import FiscalYearsPage from './pages/accounting/FiscalYearsPage'
+import DevicesLayout from './pages/devices/DevicesLayout'
+import RegistryPage from './pages/devices/RegistryPage'
+import DeviceUsersPage from './pages/devices/DeviceUsersPage'
+import PunchLogPage from './pages/devices/PunchLogPage'
+import AuditLogPage from './pages/audit/AuditLogPage'
 import StatementPage from './pages/accounting/StatementPage'
 import LedgersPage from './pages/accounting/LedgersPage'
 import AttendanceLayout from './pages/attendance/AttendanceLayout'
@@ -188,7 +194,15 @@ export default function App() {
             <Route path="balance-sheet" element={<BalanceSheetPage />} />
             <Route path="statement" element={<StatementPage />} />
             <Route path="ledgers" element={<LedgersPage />} />
+            <Route path="fiscal-years" element={<FiscalYearsPage />} />
           </Route>
+          <Route path="/devices" element={<DevicesLayout />}>
+            <Route index element={<Navigate to="registry" replace />} />
+            <Route path="registry" element={<RegistryPage />} />
+            <Route path="users" element={<DeviceUsersPage />} />
+            <Route path="punches" element={<PunchLogPage />} />
+          </Route>
+          <Route path="/audit" element={<AuditLogPage />} />
           <Route path="/attendance" element={<AttendanceLayout />}>
             <Route index element={<Navigate to="mark" replace />} />
             <Route path="mark" element={<MarkClassPage />} />

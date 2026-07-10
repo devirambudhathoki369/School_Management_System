@@ -31,10 +31,20 @@ class DeviceSerializer(serializers.ModelSerializer):
 
 
 class DeviceUserSerializer(serializers.ModelSerializer):
+    person_name = serializers.SerializerMethodField()
+    device_alias = serializers.CharField(source="device.alias", read_only=True)
+
     class Meta:
         model = DeviceUser
-        fields = ["id", "device", "pin", "card", "student", "staff", "verify"]
-        read_only_fields = ["id"]
+        fields = [
+            "id", "device", "device_alias", "pin", "card",
+            "student", "staff", "person_name", "verify",
+        ]
+        read_only_fields = ["id", "device_alias", "person_name"]
+
+    def get_person_name(self, user) -> str:
+        person = user.student or user.staff
+        return person.full_name if person else ""
 
     def validate(self, attrs):
         request = self.context["request"]

@@ -10,6 +10,7 @@ const TABS = [
   { to: '/accounting/balance-sheet', label: 'Balance sheet' },
   { to: '/accounting/statement', label: 'Ledger statement' },
   { to: '/accounting/ledgers', label: 'Ledgers' },
+  { to: '/accounting/fiscal-years', label: 'Fiscal years' },
 ]
 
 export default function AccountingLayout() {
