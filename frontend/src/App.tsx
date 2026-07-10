@@ -58,6 +58,15 @@ import LedgerPage from './pages/payroll/LedgerPage'
 import StructuresPage from './pages/payroll/StructuresPage'
 import { useAuth } from './lib/auth'
 import { ForcedPasswordChange } from './components/ChangePassword'
+import PortalShell from './layouts/PortalShell'
+import PortalHome from './pages/portal/PortalHome'
+import PortalNoticesPage from './pages/portal/PortalNoticesPage'
+import PortalCalendarPage from './pages/portal/PortalCalendarPage'
+import ChildLayout from './pages/portal/ChildLayout'
+import ChildAttendancePage from './pages/portal/ChildAttendancePage'
+import ChildResultsPage from './pages/portal/ChildResultsPage'
+import ChildFeesPage from './pages/portal/ChildFeesPage'
+import ChildHomeworkPage from './pages/portal/ChildHomeworkPage'
 
 function RequireAuth() {
   const { account, loading } = useAuth()
@@ -80,11 +89,40 @@ function RequireAuth() {
   return <Outlet />
 }
 
+/** Guardians live in the portal; everyone else in the staff console. Each
+ * side bounces the other's principal — two surfaces, never blended. */
+function RequireGuardian() {
+  const { account } = useAuth()
+  if (account?.role !== 'guardian') return <Navigate to="/dashboard" replace />
+  return <Outlet />
+}
+
+function RequireStaffSide() {
+  const { account } = useAuth()
+  if (account?.role === 'guardian') return <Navigate to="/portal" replace />
+  return <Outlet />
+}
+
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route element={<RequireAuth />}>
+        <Route element={<RequireGuardian />}>
+          <Route element={<PortalShell />}>
+            <Route path="/portal" element={<PortalHome />} />
+            <Route path="/portal/notices" element={<PortalNoticesPage />} />
+            <Route path="/portal/calendar" element={<PortalCalendarPage />} />
+            <Route path="/portal/children/:childId" element={<ChildLayout />}>
+              <Route index element={<Navigate to="attendance" replace />} />
+              <Route path="attendance" element={<ChildAttendancePage />} />
+              <Route path="results" element={<ChildResultsPage />} />
+              <Route path="fees" element={<ChildFeesPage />} />
+              <Route path="homework" element={<ChildHomeworkPage />} />
+            </Route>
+          </Route>
+        </Route>
+        <Route element={<RequireStaffSide />}>
         <Route element={<AppShell />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
@@ -165,6 +203,7 @@ export default function App() {
             <Route path="ledger" element={<LedgerPage />} />
             <Route path="structures" element={<StructuresPage />} />
           </Route>
+        </Route>
         </Route>
       </Route>
     </Routes>

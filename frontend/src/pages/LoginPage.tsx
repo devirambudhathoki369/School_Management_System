@@ -2,7 +2,8 @@ import { useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth, type Role } from '../lib/auth'
 
-const ROLES: { value: Role; label: string }[] = [
+const ROLES: { value: Role; label: string; wide?: boolean }[] = [
+  { value: 'guardian', label: 'Parent / Guardian', wide: true },
   { value: 'admin', label: 'School Admin' },
   { value: 'staff', label: 'Staff' },
   { value: 'student', label: 'Student' },
@@ -25,8 +26,10 @@ export default function LoginPage() {
     setBusy(true)
     try {
       await login(role, username.trim(), password)
-      const from = (location.state as { from?: string } | null)?.from ?? '/dashboard'
-      navigate(from, { replace: true })
+      // Guardians land in the portal; a staff-side `from` would just bounce.
+      const home = role === 'guardian' ? '/portal' : '/dashboard'
+      const from = (location.state as { from?: string } | null)?.from
+      navigate(role === 'guardian' ? home : (from ?? home), { replace: true })
     } catch {
       setError('Invalid credentials for the selected role.')
     } finally {
@@ -58,6 +61,8 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setRole(r.value)}
                   className={`min-h-11 rounded-lg border px-3 text-sm font-medium transition-colors ${
+                    r.wide ? 'col-span-2' : ''
+                  } ${
                     role === r.value
                       ? 'border-accent bg-accent-soft text-accent-strong'
                       : 'border-border text-ink-muted hover:bg-surface-sunken'
