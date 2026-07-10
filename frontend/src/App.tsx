@@ -37,6 +37,7 @@ import AccountingLayout from './pages/accounting/AccountingLayout'
 import VouchersPage from './pages/accounting/VouchersPage'
 import NewVoucherPage from './pages/accounting/NewVoucherPage'
 import TrialBalancePage from './pages/accounting/TrialBalancePage'
+import { BalanceSheetPage, ProfitLossPage } from './pages/accounting/FinancialStatementsPage'
 import StatementPage from './pages/accounting/StatementPage'
 import LedgersPage from './pages/accounting/LedgersPage'
 import AttendanceLayout from './pages/attendance/AttendanceLayout'
@@ -183,6 +184,8 @@ export default function App() {
             <Route path="vouchers" element={<VouchersPage />} />
             <Route path="new" element={<NewVoucherPage />} />
             <Route path="trial-balance" element={<TrialBalancePage />} />
+            <Route path="profit-loss" element={<ProfitLossPage />} />
+            <Route path="balance-sheet" element={<BalanceSheetPage />} />
             <Route path="statement" element={<StatementPage />} />
             <Route path="ledgers" element={<LedgersPage />} />
           </Route>

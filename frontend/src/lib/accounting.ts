@@ -88,6 +88,38 @@ export interface TrialBalance {
   total_closing_credit: string
 }
 
+export interface StatementLedgerRow {
+  id: string
+  ledger: string
+  amount: string
+}
+
+export interface StatementGroup {
+  code: number
+  group: string
+  total: string
+  ledgers: StatementLedgerRow[]
+}
+
+export interface IncomeStatement {
+  income: StatementGroup[]
+  expense: StatementGroup[]
+  total_income: string
+  total_expense: string
+  net: string
+}
+
+export interface BalanceSheet {
+  assets: StatementGroup[]
+  liabilities: StatementGroup[]
+  equity: StatementGroup[]
+  net_profit: string
+  total_assets: string
+  total_liabilities: string
+  total_equity: string
+  balanced: boolean
+}
+
 export interface StatementEntry {
   kind: 'opening' | 'voucher'
   voucher?: string

@@ -14,12 +14,14 @@ from decimal import Decimal
 from apps.accounting.models import (
     BalanceSide,
     LedgerAccount,
+    LedgerGroup,
     OpeningBalance,
     Voucher,
     VoucherLine,
 )
 
 ZERO = Decimal("0")
+Category = LedgerGroup.Category
 
 
 def _period_lines(school, fiscal_year, start_date_bs, end_date_bs):
@@ -169,6 +171,132 @@ def ledger_statement(school, fiscal_year, ledger, start_date_bs, end_date_bs) ->
                     "narration": next((o.remarks for o in own if o.remarks), ""),
                 })
     return entries
+
+
+def _signed_balances(school, fiscal_year, end_date_bs, categories, *, with_openings):
+    """Closing balance per ledger, signed TOWARD ITS GROUP'S NATURAL SIDE
+    (income/liability/equity read Cr-positive; expense/asset Dr-positive).
+
+    Correction over legacy: legacy report views summed line amounts
+    side-blind, so e.g. a refund posted against an income ledger *raised*
+    income. Signing against the natural side makes contra entries subtract,
+    which is the whole point of double entry.
+    """
+    lines = _period_lines(
+        school, fiscal_year, fiscal_year.start_date_bs, end_date_bs
+    ).filter(ledger__group__category__in=categories)
+    movements: dict = defaultdict(lambda: ZERO)
+    for ledger_id, side, amount in lines.values_list("ledger_id", "side", "amount"):
+        movements[ledger_id] += amount if side == BalanceSide.DEBIT else -amount
+
+    balances: dict = defaultdict(lambda: ZERO, movements)
+    if with_openings:
+        openings = OpeningBalance.objects.filter(
+            school=school,
+            fiscal_year=fiscal_year,
+            ledger__group__category__in=categories,
+        ).exclude(amount=0)
+        for opening in openings:
+            signed = opening.amount if opening.side == BalanceSide.DEBIT else -opening.amount
+            balances[opening.ledger_id] += signed
+
+    ledgers = LedgerAccount.objects.filter(
+        school=school, id__in=balances
+    ).select_related("group")
+    rows: dict = {}
+    for ledger in ledgers:
+        dr_value = balances[ledger.id]
+        natural_dr = ledger.group.natural_side == BalanceSide.DEBIT
+        rows[ledger.id] = {
+            "ledger": ledger,
+            # natural-side positive: what the section headings promise
+            "amount": dr_value if natural_dr else -dr_value,
+        }
+    return rows
+
+
+def _sectioned(rows, category) -> dict:
+    """Ledger rows -> group buckets -> one report section with totals."""
+    groups: dict = {}
+    for row in rows.values():
+        ledger = row["ledger"]
+        if ledger.group.category != category:
+            continue
+        bucket = groups.setdefault(
+            ledger.group.code,
+            {"code": ledger.group.code, "group": ledger.group.name, "total": ZERO, "ledgers": []},
+        )
+        bucket["ledgers"].append(
+            {"id": str(ledger.id), "ledger": ledger.name, "amount": row["amount"]}
+        )
+        bucket["total"] += row["amount"]
+    for bucket in groups.values():
+        bucket["ledgers"].sort(key=lambda r: r["ledger"].lower())
+    sections = [groups[code] for code in sorted(groups)]
+    return {"groups": sections, "total": sum((g["total"] for g in sections), ZERO)}
+
+
+def income_statement(school, fiscal_year, end_date_bs) -> dict:
+    """Profit & loss from the fiscal year's start through `end_date_bs`
+    (legacy ProfitLossReportView with two documented corrections):
+
+    - amounts are signed toward the natural side, not summed side-blind;
+    - Sales (group 21) counts as INCOME — legacy fetched it as an income
+      group but bucketed it into expense when totalling.
+
+    Income/expense ledgers carry no opening balances, so this is purely
+    period movement — same as legacy.
+    """
+    rows = _signed_balances(
+        school, fiscal_year, end_date_bs,
+        [Category.INCOME, Category.EXPENSE],
+        with_openings=False,
+    )
+    income = _sectioned(rows, Category.INCOME)
+    expense = _sectioned(rows, Category.EXPENSE)
+    return {
+        "income": income["groups"],
+        "expense": expense["groups"],
+        "total_income": income["total"],
+        "total_expense": expense["total"],
+        "net": income["total"] - expense["total"],
+    }
+
+
+def balance_sheet(school, fiscal_year, end_date_bs) -> dict:
+    """Balance sheet as of `end_date_bs` (legacy BalanceSheetReportView,
+    finished): closing balance per asset/liability/equity ledger — opening
+    plus movement from the fiscal year's start — plus the period's net
+    profit shown inside equity.
+
+    Corrections over legacy:
+    - legacy left `net_profit_loss` as a literal TODO (always 0), so its
+      sheet could never balance; here equity carries the income statement's
+      net for the same window;
+    - group membership comes from each group's category, so Bank Occ (4),
+      Suspense (28) and opening stock (30) — which legacy skipped as
+      "not confirmed" — can't silently fall out of the report.
+    """
+    rows = _signed_balances(
+        school, fiscal_year, end_date_bs,
+        [Category.ASSET, Category.LIABILITY, Category.EQUITY],
+        with_openings=True,
+    )
+    assets = _sectioned(rows, Category.ASSET)
+    liabilities = _sectioned(rows, Category.LIABILITY)
+    equity = _sectioned(rows, Category.EQUITY)
+    net = income_statement(school, fiscal_year, end_date_bs)["net"]
+    total_equity = equity["total"] + net
+    return {
+        "assets": assets["groups"],
+        "liabilities": liabilities["groups"],
+        "equity": equity["groups"],
+        "net_profit": net,
+        "total_assets": assets["total"],
+        "total_liabilities": liabilities["total"],
+        "total_equity": total_equity,
+        "balanced": assets["total"] == liabilities["total"] + total_equity,
+    }
 
 
 def group_statement(school, fiscal_year, group_codes, start_date_bs, end_date_bs) -> list[dict]:

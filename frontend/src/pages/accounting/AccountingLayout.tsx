@@ -6,6 +6,8 @@ const TABS = [
   { to: '/accounting/vouchers', label: 'Vouchers' },
   { to: '/accounting/new', label: 'New voucher' },
   { to: '/accounting/trial-balance', label: 'Trial balance' },
+  { to: '/accounting/profit-loss', label: 'P&L' },
+  { to: '/accounting/balance-sheet', label: 'Balance sheet' },
   { to: '/accounting/statement', label: 'Ledger statement' },
   { to: '/accounting/ledgers', label: 'Ledgers' },
 ]

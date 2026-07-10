@@ -162,6 +162,35 @@ class VoucherViewSet(TenantScopedViewSet):
             return error
         return Response(reports.trial_balance(request.school, *scope))
 
+    def _as_of_scope(self, request):
+        """(fiscal_year, end_date_bs) for as-of reports; end defaults to the
+        fiscal year's last day."""
+        fiscal_year = FiscalYear.objects.filter(
+            id=request.query_params.get("fiscal_year"), school=request.school
+        ).first()
+        if fiscal_year is None:
+            return None, Response(
+                {"error": {"message": "fiscal_year is required."}}, status=400
+            )
+        end = request.query_params.get("end_date_bs") or fiscal_year.end_date_bs
+        return (fiscal_year, end), None
+
+    @extend_schema(summary="Profit & loss for a fiscal year (through a BS date)")
+    @action(detail=False, methods=["get"], url_path="income-statement")
+    def income_statement(self, request):
+        scope, error = self._as_of_scope(request)
+        if error:
+            return error
+        return Response(reports.income_statement(request.school, *scope))
+
+    @extend_schema(summary="Balance sheet as of a BS date")
+    @action(detail=False, methods=["get"], url_path="balance-sheet")
+    def balance_sheet(self, request):
+        scope, error = self._as_of_scope(request)
+        if error:
+            return error
+        return Response(reports.balance_sheet(request.school, *scope))
+
     @extend_schema(summary="Individual or group-wise ledger report")
     @action(detail=False, methods=["get"], url_path="ledger-report")
     def ledger_report(self, request):

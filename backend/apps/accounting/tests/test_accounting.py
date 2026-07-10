@@ -15,7 +15,12 @@ from apps.accounting.models import (
     Voucher,
     VoucherLine,
 )
-from apps.accounting.services.reports import ledger_statement, trial_balance
+from apps.accounting.services.reports import (
+    balance_sheet,
+    income_statement,
+    ledger_statement,
+    trial_balance,
+)
 from apps.people.tests.test_module_permissions import make_staff
 from apps.people.tests.test_tenant_isolation import login, make_school
 
@@ -225,6 +230,63 @@ class TestReports:
             ("Tuition income", "cr"),  # INV: cash's counterparty
             ("Rent expense", "dr"),    # EXV: cash's counterparty
         }
+
+    def test_income_statement_signs_contra_entries(self, accounting_setup):
+        """Correction over legacy: a refund (Dr on an income ledger) reduces
+        income; legacy summed side-blind and would have raised it."""
+        school, fy, cash, bank, tuition, rent = accounting_setup
+        api = APIClient()
+        login(api, "admin_acct", "admin")
+        self.seed_books(api, school, fy, cash, tuition, rent)
+        post_voucher(api, fy, {  # 500 fee refund, posted as a journal
+            "voucher_type": "journal",
+            "lines": [
+                {"ledger": str(tuition.id), "amount": "500.00", "side": "dr"},
+                {"ledger": str(cash.id), "amount": "500.00", "side": "cr"},
+            ],
+        })
+        pl = income_statement(school, fy, fy.end_date_bs)
+        assert pl["total_income"] == Decimal("4500.00")  # 5000 - 500 refund
+        assert pl["total_expense"] == Decimal("2000.00")
+        assert pl["net"] == Decimal("2500.00")
+        income_rows = [l for g in pl["income"] for l in g["ledgers"]]
+        assert income_rows == [
+            {"id": str(tuition.id), "ledger": "Tuition income", "amount": Decimal("4500.00")}
+        ]
+
+    def test_balance_sheet_balances_with_net_profit(self, accounting_setup):
+        """Correction over legacy: net profit lands in equity (legacy left it
+        a TODO at 0, so the sheet could never balance)."""
+        school, fy, cash, bank, tuition, rent = accounting_setup
+        api = APIClient()
+        login(api, "admin_acct", "admin")
+        capital = LedgerAccount.objects.create(school=school, name="Capital", group_id=6)
+        OpeningBalance.objects.create(  # matches the cash opening in seed_books
+            school=school, ledger=capital, fiscal_year=fy, side="cr", amount="1000.00"
+        )
+        self.seed_books(api, school, fy, cash, tuition, rent)
+        sheet = balance_sheet(school, fy, fy.end_date_bs)
+        # cash = 1000 opening + 5000 income - 2000 expense
+        assert sheet["total_assets"] == Decimal("4000.00")
+        assert sheet["net_profit"] == Decimal("3000.00")
+        assert sheet["total_equity"] == Decimal("4000.00")  # 1000 capital + 3000 net
+        assert sheet["total_liabilities"] == ZERO
+        assert sheet["balanced"] is True
+        cash_group = next(g for g in sheet["assets"] if g["group"] == "Cash in Hand")
+        assert cash_group["total"] == Decimal("4000.00")
+
+    def test_statement_endpoints(self, accounting_setup):
+        school, fy, cash, bank, tuition, rent = accounting_setup
+        api = APIClient()
+        login(api, "admin_acct", "admin")
+        self.seed_books(api, school, fy, cash, tuition, rent)
+        pl = api.get(f"/api/v1/accounting/vouchers/income-statement/?fiscal_year={fy.id}")
+        assert pl.status_code == 200, pl.content
+        assert pl.data["net"] == Decimal("3000.00")
+        bs = api.get(f"/api/v1/accounting/vouchers/balance-sheet/?fiscal_year={fy.id}")
+        assert bs.status_code == 200, bs.content
+        assert bs.data["net_profit"] == Decimal("3000.00")
+        assert api.get("/api/v1/accounting/vouchers/balance-sheet/").status_code == 400
 
     def test_report_endpoint_requires_scope(self, accounting_setup):
         school, fy, cash, bank, tuition, rent = accounting_setup
