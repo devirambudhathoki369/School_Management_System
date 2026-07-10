@@ -28,7 +28,7 @@ from .serializers import (
     StudentMarkSerializer,
     SubjectResultSheetSerializer,
 )
-from .services import positions
+from .services import grading, positions
 
 MANAGERS = (Role.ADMIN, Role.STAFF)
 
@@ -51,6 +51,108 @@ class ExamViewSet(TenantScopedViewSet):
             raise ValidationError({"published_date_bs": "Required."})
         count = positions.publish(exam, class_info, published_date_bs)
         return Response({"published_sheets": count})
+
+    @extend_schema(summary="Full class result for one class (print source)")
+    @action(detail=True, methods=["get"], url_path="class-result")
+    def class_result(self, request, pk=None):
+        """Every student × every subject of (exam, class): marks, letters,
+        totals, percentage, GPA and positions — the data behind the printed
+        class-result sheet and per-student marksheets/gradesheets."""
+        exam = self.get_object()
+        class_info = get_object_or_404(
+            ClassInfo, id=request.query_params.get("class_info"), school=request.school
+        )
+        sheets = list(
+            SubjectResultSheet.objects.filter(exam=exam, class_info=class_info)
+            .select_related("subject")
+            .order_by("subject__order", "subject__name")
+            .prefetch_related("results__student")
+        )
+        students: dict = {}
+        for sheet in sheets:
+            hours = sheet.subject.credit_hours + (
+                sheet.subject.credit_hours_practical or 0
+            )
+            for result in sheet.results.all():
+                row = students.setdefault(
+                    result.student_id,
+                    {
+                        "id": str(result.student_id),
+                        "name": result.student.full_name,
+                        "roll_no": result.student.roll_no,
+                        "marks": {},
+                        "total": 0,
+                        "full_marks": 0,
+                        "weighted_gp": 0,
+                        "credit_hours": 0,
+                        "all_passed": True,
+                        "position_in_section": None,
+                        "position_in_class": None,
+                    },
+                )
+                gp = grading.grade_point(result.total, sheet.full_marks)
+                row["marks"][str(sheet.subject_id)] = {
+                    "theory": result.theory,
+                    "practical": result.practical,
+                    "total": result.total,
+                    "passed": result.passed,
+                    "absent": result.absent,
+                    "letter": grading.letter_grade(result.total, sheet.full_marks),
+                    "grade_point": gp,
+                }
+                row["total"] += result.total
+                row["full_marks"] += sheet.full_marks
+                row["weighted_gp"] += gp * hours
+                row["credit_hours"] += hours
+                if not result.passed:
+                    row["all_passed"] = False
+                if result.position_in_section is not None:
+                    row["position_in_section"] = result.position_in_section
+                if result.position_in_class is not None:
+                    row["position_in_class"] = result.position_in_class
+        payload = []
+        for row in students.values():
+            student_gpa = (
+                grading.gpa(row.pop("weighted_gp"), row["credit_hours"])
+                if row["credit_hours"]
+                else None
+            )
+            row.pop("credit_hours")
+            percent = grading.percentage(row["total"], row["full_marks"])
+            payload.append(
+                {
+                    **row,
+                    "percentage": percent,
+                    "gpa": student_gpa,
+                    "gpa_letter": grading.gp_letter(student_gpa) if student_gpa else "",
+                }
+            )
+        payload.sort(
+            key=lambda r: (
+                r["position_in_section"] is None,
+                r["position_in_section"] or 0,
+                -r["total"],
+            )
+        )
+        return Response(
+            {
+                "exam": {"id": str(exam.id), "name": exam.name,
+                         "academic_year_name": exam.academic_year.name},
+                "class_label": str(class_info),
+                "published": bool(sheets) and all(s.published_date_bs for s in sheets),
+                "subjects": [
+                    {
+                        "id": str(s.subject_id),
+                        "name": s.subject.name,
+                        "full_marks": s.full_marks,
+                        "pass_marks": s.pass_marks,
+                        "published": bool(s.published_date_bs),
+                    }
+                    for s in sheets
+                ],
+                "students": payload,
+            }
+        )
 
 
 class ExamScheduleEntryViewSet(TenantScopedViewSet):

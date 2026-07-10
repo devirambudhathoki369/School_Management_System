@@ -121,6 +121,22 @@ export interface BalanceSheet {
   balanced: boolean
 }
 
+export interface CashFlowSection {
+  items: StatementLedgerRow[]
+  total: string
+  net_profit?: string
+}
+
+export interface CashFlow {
+  operating: CashFlowSection
+  investing: CashFlowSection
+  financing: CashFlowSection
+  other: CashFlowSection
+  net_change: string
+  opening_cash: string
+  closing_cash: string
+}
+
 export interface StatementEntry {
   kind: 'opening' | 'voucher'
   voucher?: string

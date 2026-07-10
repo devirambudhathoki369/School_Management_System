@@ -101,6 +101,7 @@ const NAV: Section[] = [
           { label: 'Exams & publishing', to: '/exams/list' },
           { label: 'Result sheets & marks', to: '/exams/sheets' },
           { label: 'Exam schedule', to: '/exams/schedule' },
+          { label: 'Results & print', to: '/exams/results' },
           { label: 'Grading rules', to: '/exams/grading' },
         ],
       },
@@ -137,6 +138,7 @@ const NAV: Section[] = [
           { label: 'Trial balance', to: '/accounting/trial-balance' },
           { label: 'Profit & loss', to: '/accounting/profit-loss' },
           { label: 'Balance sheet', to: '/accounting/balance-sheet' },
+          { label: 'Cash flow', to: '/accounting/cash-flow' },
           { label: 'Ledger statement', to: '/accounting/statement' },
           { label: 'Ledgers', to: '/accounting/ledgers' },
           { label: 'Fiscal years', to: '/accounting/fiscal-years' },
@@ -185,6 +187,7 @@ const NAV: Section[] = [
         needs: ['communication.view', 'communication.manage'],
         children: [
           { label: 'Notices', to: '/communication/notices' },
+          { label: 'News & events', to: '/communication/news' },
           { label: 'Academic calendar', to: '/communication/calendar' },
           { label: 'Message templates', to: '/communication/templates' },
           { label: 'Deliveries', to: '/communication/deliveries' },

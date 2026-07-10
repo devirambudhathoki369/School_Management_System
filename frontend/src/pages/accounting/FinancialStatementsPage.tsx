@@ -6,6 +6,8 @@ import {
   currentFiscalYear,
   useFiscalYears,
   type BalanceSheet,
+  type CashFlow,
+  type CashFlowSection,
   type IncomeStatement,
   type StatementGroup,
 } from '../../lib/accounting'
@@ -280,6 +282,105 @@ export function BalanceSheetPage() {
               />
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FlowSection({ title, section }: { title: string; section: CashFlowSection }) {
+  const total = Number(section.total)
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-surface">
+      <div className="flex items-baseline justify-between border-b border-border px-5 py-3.5">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-ink-muted">{title}</h3>
+        <p
+          className={`text-base font-semibold tabular-nums ${
+            total > 0 ? 'text-positive' : total < 0 ? 'text-danger' : ''
+          }`}
+        >
+          {formatMoney(section.total)}
+        </p>
+      </div>
+      {section.items.length === 0 ? (
+        <p className="px-5 py-4 text-sm text-ink-muted">No movement in this period.</p>
+      ) : (
+        <ul className="divide-y divide-border">
+          {section.items.map((row) => (
+            <li key={row.id} className="flex justify-between gap-3 px-5 py-2.5 text-sm">
+              <span className="truncate text-ink-muted">{row.ledger}</span>
+              <span
+                className={`tabular-nums ${Number(row.amount) < 0 ? 'text-danger' : ''}`}
+              >
+                {formatMoney(row.amount)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+export function CashFlowPage() {
+  const { year, end, controls } = useStatementScope()
+  const report = useQuery({
+    queryKey: ['accounting', 'cash-flow', year?.id, end],
+    queryFn: async () =>
+      (
+        await api.get<CashFlow>('/api/v1/accounting/vouchers/cash-flow/', {
+          params: { fiscal_year: year!.id, end_date_bs: end },
+        })
+      ).data,
+    enabled: !!year && !!end,
+  })
+
+  const data = report.data
+  const change = Number(data?.net_change ?? 0)
+
+  return (
+    <div>
+      {controls}
+      {report.isLoading || !data ? (
+        <div className="rounded-xl border border-border bg-surface">
+          <SkeletonRows rows={6} />
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[
+              { label: 'Opening cash & bank', value: data.opening_cash, tone: '' },
+              {
+                label: 'Net change',
+                value: data.net_change,
+                tone: change > 0 ? 'text-positive' : change < 0 ? 'text-danger' : '',
+              },
+              { label: 'Closing cash & bank', value: data.closing_cash, tone: '' },
+            ].map((stat) => (
+              <div key={stat.label} className="rounded-xl border border-border bg-surface p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">
+                  {stat.label}
+                </p>
+                <p className={`mt-1 text-xl font-semibold tabular-nums ${stat.tone}`}>
+                  {formatMoney(stat.value)}
+                </p>
+              </div>
+            ))}
+          </div>
+          {data.operating.net_profit !== undefined && (
+            <p className="text-xs text-ink-faint">
+              Operating includes net profit of {formatMoney(data.operating.net_profit)} —
+              activities reconcile to the cash change by construction.
+            </p>
+          )}
+          <div className="grid items-start gap-4 lg:grid-cols-3">
+            <FlowSection title="Operating" section={data.operating} />
+            <FlowSection title="Investing" section={data.investing} />
+            <FlowSection title="Financing" section={data.financing} />
+          </div>
+          {data.other.items.length > 0 && (
+            <FlowSection title="Unclassified" section={data.other} />
+          )}
         </div>
       )}
     </div>

@@ -159,3 +159,56 @@ export function useGradingSchemes() {
     queryFn: () => fetchAllPages<GradingScheme>('/api/v1/examinations/grading-schemes/'),
   })
 }
+
+export interface ClassResultMark {
+  theory: string | null
+  practical: string | null
+  total: string
+  passed: boolean
+  absent: boolean
+  letter: string
+  grade_point: string
+}
+
+export interface ClassResultStudent {
+  id: string
+  name: string
+  roll_no: string
+  marks: Record<string, ClassResultMark>
+  total: string
+  full_marks: string
+  percentage: string
+  gpa: string | null
+  gpa_letter: string
+  all_passed: boolean
+  position_in_section: number | null
+  position_in_class: number | null
+}
+
+export interface ClassResult {
+  exam: { id: string; name: string; academic_year_name: string }
+  class_label: string
+  published: boolean
+  subjects: Array<{
+    id: string
+    name: string
+    full_marks: string
+    pass_marks: string
+    published: boolean
+  }>
+  students: ClassResultStudent[]
+}
+
+export function useClassResult(examId: string | null, classId: string | null) {
+  return useQuery({
+    queryKey: ['exams', 'class-result', examId, classId],
+    queryFn: async () =>
+      (
+        await api.get<ClassResult>(
+          `/api/v1/examinations/exams/${examId}/class-result/`,
+          { params: { class_info: classId } },
+        )
+      ).data,
+    enabled: !!examId && !!classId,
+  })
+}

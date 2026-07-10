@@ -17,6 +17,7 @@ from apps.accounting.models import (
 )
 from apps.accounting.services.reports import (
     balance_sheet,
+    cash_flow_statement,
     income_statement,
     ledger_statement,
     trial_balance,
@@ -274,6 +275,31 @@ class TestReports:
         assert sheet["balanced"] is True
         cash_group = next(g for g in sheet["assets"] if g["group"] == "Cash in Hand")
         assert cash_group["total"] == Decimal("4000.00")
+
+    def test_cash_flow_reconciles_to_cash_change(self, accounting_setup):
+        """opening + net change == closing, and activity totals explain the
+        change (income/expense flow through the cash balancing lines)."""
+        school, fy, cash, bank, tuition, rent = accounting_setup
+        api = APIClient()
+        login(api, "admin_acct", "admin")
+        self.seed_books(api, school, fy, cash, tuition, rent)
+        flow = cash_flow_statement(school, fy, fy.end_date_bs)
+        # tuition +5000 in, rent -2000 out, all through cash
+        assert flow["net_change"] == Decimal("3000.00")
+        assert flow["opening_cash"] == Decimal("1000.00")
+        assert flow["closing_cash"] == Decimal("4000.00")
+        assert flow["operating"]["total"] == Decimal("3000.00")
+        assert flow["operating"]["net_profit"] == Decimal("3000.00")
+        items = {i["ledger"]: i["amount"] for i in flow["operating"]["items"]}
+        assert items == {
+            "Tuition income": Decimal("5000.00"),
+            "Rent expense": Decimal("-2000.00"),
+        }
+        assert flow["investing"]["total"] == ZERO
+        assert flow["financing"]["total"] == ZERO
+        res = api.get(f"/api/v1/accounting/vouchers/cash-flow/?fiscal_year={fy.id}")
+        assert res.status_code == 200, res.content
+        assert res.data["net_change"] == Decimal("3000.00")
 
     def test_statement_endpoints(self, accounting_setup):
         school, fy, cash, bank, tuition, rent = accounting_setup

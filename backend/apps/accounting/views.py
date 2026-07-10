@@ -191,6 +191,14 @@ class VoucherViewSet(TenantScopedViewSet):
             return error
         return Response(reports.balance_sheet(request.school, *scope))
 
+    @extend_schema(summary="Cash flow statement (fiscal-year start through a BS date)")
+    @action(detail=False, methods=["get"], url_path="cash-flow")
+    def cash_flow(self, request):
+        scope, error = self._as_of_scope(request)
+        if error:
+            return error
+        return Response(reports.cash_flow_statement(request.school, *scope))
+
     @extend_schema(summary="Individual or group-wise ledger report")
     @action(detail=False, methods=["get"], url_path="ledger-report")
     def ledger_report(self, request):

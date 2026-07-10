@@ -37,13 +37,15 @@ import AccountingLayout from './pages/accounting/AccountingLayout'
 import VouchersPage from './pages/accounting/VouchersPage'
 import NewVoucherPage from './pages/accounting/NewVoucherPage'
 import TrialBalancePage from './pages/accounting/TrialBalancePage'
-import { BalanceSheetPage, ProfitLossPage } from './pages/accounting/FinancialStatementsPage'
+import { BalanceSheetPage, CashFlowPage, ProfitLossPage } from './pages/accounting/FinancialStatementsPage'
 import FiscalYearsPage from './pages/accounting/FiscalYearsPage'
 import DevicesLayout from './pages/devices/DevicesLayout'
 import RegistryPage from './pages/devices/RegistryPage'
 import DeviceUsersPage from './pages/devices/DeviceUsersPage'
 import PunchLogPage from './pages/devices/PunchLogPage'
 import AuditLogPage from './pages/audit/AuditLogPage'
+import ResultsPage from './pages/exams/ResultsPage'
+import NewsPage from './pages/communication/NewsPage'
 import StatementPage from './pages/accounting/StatementPage'
 import LedgersPage from './pages/accounting/LedgersPage'
 import AttendanceLayout from './pages/attendance/AttendanceLayout'
@@ -157,6 +159,7 @@ export default function App() {
           <Route path="/communication" element={<CommunicationLayout />}>
             <Route index element={<Navigate to="notices" replace />} />
             <Route path="notices" element={<NoticesPage />} />
+            <Route path="news" element={<NewsPage />} />
             <Route path="calendar" element={<CalendarPage />} />
             <Route path="templates" element={<TemplatesPage />} />
             <Route path="deliveries" element={<DeliveriesPage />} />
@@ -192,6 +195,7 @@ export default function App() {
             <Route path="trial-balance" element={<TrialBalancePage />} />
             <Route path="profit-loss" element={<ProfitLossPage />} />
             <Route path="balance-sheet" element={<BalanceSheetPage />} />
+            <Route path="cash-flow" element={<CashFlowPage />} />
             <Route path="statement" element={<StatementPage />} />
             <Route path="ledgers" element={<LedgersPage />} />
             <Route path="fiscal-years" element={<FiscalYearsPage />} />
@@ -214,6 +218,7 @@ export default function App() {
             <Route path="list" element={<ExamsPage />} />
             <Route path="sheets" element={<SheetsPage />} />
             <Route path="sheets/:sheetId/marks" element={<MarksPage />} />
+            <Route path="results" element={<ResultsPage />} />
             <Route path="schedule" element={<SchedulePage />} />
             <Route path="grading" element={<GradingPage />} />
           </Route>

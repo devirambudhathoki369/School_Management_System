@@ -299,6 +299,86 @@ def balance_sheet(school, fiscal_year, end_date_bs) -> dict:
     }
 
 
+CASH_EQUIVALENT_GROUPS = (3, 7)  # Bank Account, Cash in Hand
+
+
+def cash_flow_statement(school, fiscal_year, end_date_bs) -> dict:
+    """Cash flow (indirect), legacy CashFlowReportView port.
+
+    Every voucher stores all of its legs — income/expense vouchers include
+    the cash/bank balancing line — so each ledger's period movement (Dr−Cr)
+    is available straight from the lines. The movement of the cash
+    equivalents (groups 3, 7) IS the net cash change; every other ledger's
+    movement converts to its cash effect (−movement) and classifies as
+    operating / investing / financing via the group's cash-flow class.
+    Because vouchers balance, activities reconcile to the cash change by
+    construction.
+
+    Difference from legacy: the window always starts at the fiscal year's
+    start. Legacy accepted any start date but still used the FY opening as
+    "opening cash", so a mid-year window silently broke the
+    opening + net change = closing identity this report exists to show.
+    """
+    lines = _period_lines(school, fiscal_year, fiscal_year.start_date_bs, end_date_bs)
+    movements: dict = defaultdict(lambda: ZERO)
+    for ledger_id, side, amount in lines.values_list("ledger_id", "side", "amount"):
+        movements[ledger_id] += amount if side == BalanceSide.DEBIT else -amount
+
+    ledgers = {
+        ledger.id: ledger
+        for ledger in LedgerAccount.objects.filter(
+            school=school, id__in=movements
+        ).select_related("group")
+    }
+
+    sections: dict[str, list] = {"operating": [], "investing": [], "financing": [], "other": []}
+    net_change = ZERO
+    net_profit = ZERO
+    for ledger_id, movement in movements.items():
+        ledger = ledgers.get(ledger_id)
+        if ledger is None or movement == ZERO:
+            continue
+        if ledger.group.code in CASH_EQUIVALENT_GROUPS:
+            net_change += movement  # debit-natured: Dr−Cr == net increase
+            continue
+        cash_impact = -movement
+        flow = ledger.group.cash_flow or "other"
+        sections.setdefault(flow, sections["other"]).append(
+            {"id": str(ledger_id), "ledger": ledger.name, "amount": cash_impact}
+        )
+        if flow == "operating" and ledger.group.category in (
+            Category.INCOME, Category.EXPENSE,
+        ):
+            net_profit += cash_impact
+    for items in sections.values():
+        items.sort(key=lambda i: i["ledger"].lower())
+
+    opening_cash = ZERO
+    for opening in OpeningBalance.objects.filter(
+        school=school, fiscal_year=fiscal_year,
+        ledger__group__code__in=CASH_EQUIVALENT_GROUPS,
+    ):
+        signed = opening.amount if opening.side == BalanceSide.DEBIT else -opening.amount
+        opening_cash += signed
+
+    def total(items):
+        return sum((i["amount"] for i in items), ZERO)
+
+    return {
+        "operating": {
+            "items": sections["operating"],
+            "total": total(sections["operating"]),
+            "net_profit": net_profit,
+        },
+        "investing": {"items": sections["investing"], "total": total(sections["investing"])},
+        "financing": {"items": sections["financing"], "total": total(sections["financing"])},
+        "other": {"items": sections["other"], "total": total(sections["other"])},
+        "net_change": net_change,
+        "opening_cash": opening_cash,
+        "closing_cash": opening_cash + net_change,
+    }
+
+
 def group_statement(school, fiscal_year, group_codes, start_date_bs, end_date_bs) -> list[dict]:
     """Group-wise ledger report: every period line whose ledger belongs to
     the requested groups (legacy ReportKind.GROUPWISE)."""

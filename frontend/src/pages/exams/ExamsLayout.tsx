@@ -6,6 +6,7 @@ const TABS = [
   { to: '/exams/list', label: 'Exams' },
   { to: '/exams/sheets', label: 'Result sheets' },
   { to: '/exams/schedule', label: 'Schedule' },
+  { to: '/exams/results', label: 'Results & print' },
   { to: '/exams/grading', label: 'Grading' },
 ]
 

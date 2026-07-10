@@ -82,6 +82,53 @@ def exam_setup(db):
 
 
 @pytest.mark.django_db
+class TestClassResult:
+    def test_class_result_aggregates_marks_letters_and_gpa(self, exam_setup):
+        school, exam, class_a, _, sheet, (amina, binita, champa) = exam_setup
+        api = APIClient()
+        login(api, "admin_delta", "admin")
+        api.put(
+            f"/api/v1/examinations/sheets/{sheet.id}/marks/entry/",
+            {"marks": [
+                {"student": str(amina.id), "theory": "60", "practical": "20"},
+                {"student": str(binita.id), "theory": "25", "practical": "20"},
+                {"student": str(champa.id), "absent": True},
+            ]},
+            format="json",
+        )
+        res = api.get(
+            f"/api/v1/examinations/exams/{exam.id}/class-result/?class_info={class_a.id}"
+        )
+        assert res.status_code == 200, res.content
+        assert res.data["published"] is False
+        assert [s["name"] for s in res.data["subjects"]] == ["Maths"]
+        rows = {r["name"]: r for r in res.data["students"]}
+        amina_row = rows["Amina Delta"]
+        subject_id = res.data["subjects"][0]["id"]
+        assert amina_row["marks"][subject_id]["total"] == Decimal("80.00")
+        assert amina_row["marks"][subject_id]["letter"] == "A"   # 80%
+        assert amina_row["percentage"] == Decimal("80.00")
+        assert amina_row["gpa"] == Decimal("3.60")
+        assert amina_row["gpa_letter"] == "A"
+        assert amina_row["all_passed"] is True
+        assert rows["Binita Delta"]["all_passed"] is False
+        champa_row = rows["Champa Delta"]
+        assert champa_row["marks"][subject_id]["absent"] is True
+        # ordering: no positions yet -> highest total first
+        assert res.data["students"][0]["name"] == "Amina Delta"
+
+    def test_class_result_requires_own_school_class(self, exam_setup):
+        school, exam, class_a, *_ = exam_setup
+        make_school("delta2")
+        api = APIClient()
+        login(api, "admin_delta2", "admin")
+        res = api.get(
+            f"/api/v1/examinations/exams/{exam.id}/class-result/?class_info={class_a.id}"
+        )
+        assert res.status_code == 404
+
+
+@pytest.mark.django_db
 class TestMarksEntry:
     def entry(self, api, sheet, marks):
         return api.put(

@@ -8,6 +8,7 @@ const TABS = [
   { to: '/accounting/trial-balance', label: 'Trial balance' },
   { to: '/accounting/profit-loss', label: 'P&L' },
   { to: '/accounting/balance-sheet', label: 'Balance sheet' },
+  { to: '/accounting/cash-flow', label: 'Cash flow' },
   { to: '/accounting/statement', label: 'Ledger statement' },
   { to: '/accounting/ledgers', label: 'Ledgers' },
   { to: '/accounting/fiscal-years', label: 'Fiscal years' },

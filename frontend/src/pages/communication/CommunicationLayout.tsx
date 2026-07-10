@@ -6,6 +6,7 @@ export default function CommunicationLayout() {
       ariaLabel="Communication sections"
       tabs={[
         { to: '/communication/notices', label: 'Notices' },
+        { to: '/communication/news', label: 'News & events' },
         { to: '/communication/calendar', label: 'Calendar' },
         { to: '/communication/templates', label: 'Templates' },
         { to: '/communication/deliveries', label: 'Delivery log' },
