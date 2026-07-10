@@ -11,6 +11,9 @@ export interface GuardianPerson {
   email: string
   address: string
   occupation: string
+  /** Portal login, present once access has been provisioned. */
+  portal_username: string | null
+  portal_active: boolean
 }
 
 export interface GuardianLink {

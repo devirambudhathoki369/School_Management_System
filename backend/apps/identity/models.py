@@ -55,6 +55,9 @@ class Account(AbstractBaseUser, PermissionsMixin):
     role = models.CharField(max_length=12, choices=Role.choices, db_index=True)
     email = models.EmailField(blank=True, default="")
     verified = models.BooleanField(default=False)
+    # Admin-provisioned credentials (e.g. guardian portal access) ship with a
+    # temporary password; the holder must set their own before normal use.
+    password_change_required = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)  # Django admin access only
     created_at = models.DateTimeField(auto_now_add=True)

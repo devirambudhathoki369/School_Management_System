@@ -66,7 +66,7 @@ class StudentViewSet(TenantScopedViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
         if self.action == "retrieve":
-            qs = qs.prefetch_related("guardian_links__guardian")
+            qs = qs.prefetch_related("guardian_links__guardian__account")
         search = self.request.query_params.get("search", "").strip()
         if search:
             for term in search.split()[:4]:
@@ -212,7 +212,7 @@ class StudentViewSet(TenantScopedViewSet):
 
 
 class GuardianViewSet(TenantScopedViewSet):
-    queryset = Guardian.objects.all()
+    queryset = Guardian.objects.select_related("account")
     serializer_class = GuardianSerializer
     allowed_roles = MANAGERS
     permission_code = "students"
@@ -224,6 +224,35 @@ class GuardianViewSet(TenantScopedViewSet):
             for term in search.split()[:4]:
                 qs = qs.filter(name__icontains=term) | qs.filter(contact__icontains=term)
         return qs.order_by("name")
+
+    @extend_schema(
+        summary="Grant or reset guardian portal access",
+        request=None,
+        description=(
+            "Creates the guardian's portal login (or rotates the password of an "
+            "existing one, reactivating it and ending all sessions). The response "
+            "carries the temporary password exactly once; it is never retrievable "
+            "again."
+        ),
+    )
+    @action(detail=True, methods=["post", "delete"], url_path="portal-access")
+    def portal_access(self, request, pk=None):
+        from . import services
+
+        guardian = self.get_object()
+        if request.method == "DELETE":
+            if not services.revoke_portal_access(guardian):
+                raise ValidationError("This guardian has no portal account.")
+            return Response(status=204)
+        account, temp_password, created = services.provision_portal_access(guardian)
+        return Response(
+            {
+                "username": account.username,
+                "temp_password": temp_password,
+                "created": created,
+            },
+            status=201 if created else 200,
+        )
 
 
 class StaffViewSet(TenantScopedViewSet):

@@ -1,14 +1,17 @@
+from django.db import transaction
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.generics import GenericAPIView, RetrieveAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.throttling import AnonRateThrottle
+from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.core.permissions import PERMISSION_MODULES
 
-from .serializers import AccountSerializer, LoginSerializer
+from .serializers import AccountSerializer, ChangePasswordSerializer, LoginSerializer
 
 
 class LoginThrottle(AnonRateThrottle):
@@ -35,6 +38,46 @@ class LoginView(GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class ChangePasswordThrottle(UserRateThrottle):
+    scope = "change-password"
+    rate = "5/min"
+
+
+class ChangePasswordView(GenericAPIView):
+    """Self-service password change for any authenticated principal.
+
+    Every outstanding refresh token is blacklisted — a password change must
+    end every other session (stolen-credential recovery). A fresh token pair
+    is returned so the caller's own session survives.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ChangePasswordThrottle]
+    serializer_class = ChangePasswordSerializer
+
+    @extend_schema(summary="Change own password")
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        account = request.user
+        with transaction.atomic():
+            account.set_password(serializer.validated_data["new_password"])
+            account.password_change_required = False
+            account.save(update_fields=["password", "password_change_required", "updated_at"])
+            for token in OutstandingToken.objects.filter(user=account):
+                BlacklistedToken.objects.get_or_create(token=token)
+        refresh = RefreshToken.for_user(account)
+        refresh["role"] = account.role
+        return Response(
+            {
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "account": AccountSerializer(account).data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class PermissionCatalogView(APIView):

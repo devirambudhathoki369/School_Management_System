@@ -57,6 +57,7 @@ import PostingsPage from './pages/payroll/PostingsPage'
 import LedgerPage from './pages/payroll/LedgerPage'
 import StructuresPage from './pages/payroll/StructuresPage'
 import { useAuth } from './lib/auth'
+import { ForcedPasswordChange } from './components/ChangePassword'
 
 function RequireAuth() {
   const { account, loading } = useAuth()
@@ -70,6 +71,11 @@ function RequireAuth() {
   }
   if (!account) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />
+  }
+  if (account.password_change_required) {
+    // Temp credentials (e.g. office-issued portal logins) never reach the
+    // workspace — the holder must set their own password first.
+    return <ForcedPasswordChange />
   }
   return <Outlet />
 }

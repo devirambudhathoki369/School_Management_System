@@ -8,6 +8,7 @@ import {
   IconCalendar,
   IconClipboard,
   IconDashboard,
+  IconKey,
   IconLayers,
   IconLibrary,
   IconLogout,
@@ -18,6 +19,7 @@ import {
   IconStudents,
   IconWallet,
 } from '../components/icons'
+import { ChangePasswordModal } from '../components/ChangePassword'
 
 /**
  * Application frame, responsive by construction:
@@ -192,6 +194,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
 export default function AppShell() {
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [changingPassword, setChangingPassword] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
   const { account, logout } = useAuth()
@@ -240,6 +243,14 @@ export default function AppShell() {
               {account?.username} · {account?.role.replace('_', ' ')}
             </span>
             <button
+              onClick={() => setChangingPassword(true)}
+              aria-label="Change password"
+              title="Change password"
+              className="flex size-10 items-center justify-center rounded-lg border border-border text-ink-muted hover:bg-surface-sunken"
+            >
+              <IconKey size={16} />
+            </button>
+            <button
               onClick={onLogout}
               className="flex min-h-10 items-center gap-2 rounded-lg border border-border px-3 text-sm font-medium text-ink-muted hover:bg-surface-sunken"
             >
@@ -252,6 +263,9 @@ export default function AppShell() {
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <Outlet />
         </main>
+        {changingPassword && (
+          <ChangePasswordModal onClose={() => setChangingPassword(false)} />
+        )}
       </div>
     </div>
   )

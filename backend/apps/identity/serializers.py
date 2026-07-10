@@ -1,4 +1,4 @@
-from django.contrib.auth import authenticate
+from django.contrib.auth import authenticate, password_validation
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -13,7 +13,7 @@ class AccountSerializer(serializers.ModelSerializer):
         model = Account
         fields = [
             "id", "username", "role", "email", "verified", "last_login",
-            "permissions", "school",
+            "password_change_required", "permissions", "school",
         ]
         read_only_fields = fields
 
@@ -73,3 +73,31 @@ class LoginSerializer(serializers.Serializer):
             "refresh": str(refresh),
             "account": AccountSerializer(account).data,
         }
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    """Self-service password change. Requires the current password even for
+    forced changes (the temp credential IS the proof of possession)."""
+
+    current_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    new_password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    @property
+    def account(self):
+        return self.context["request"].user
+
+    def validate_current_password(self, value):
+        if not self.account.check_password(value):
+            raise serializers.ValidationError("Current password is incorrect.")
+        return value
+
+    def validate_new_password(self, value):
+        password_validation.validate_password(value, user=self.account)
+        return value
+
+    def validate(self, attrs):
+        if attrs["current_password"] == attrs["new_password"]:
+            raise serializers.ValidationError(
+                {"new_password": "New password must differ from the current one."}
+            )
+        return attrs

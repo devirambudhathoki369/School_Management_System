@@ -32,8 +32,15 @@ export interface Account {
   role: Role
   email: string
   verified: boolean
+  password_change_required: boolean
   permissions: string[]
   school: SchoolInfo | null
+}
+
+export interface SessionPayload {
+  access: string
+  refresh: string
+  account: Account
 }
 
 interface AuthState {
@@ -41,6 +48,8 @@ interface AuthState {
   loading: boolean
   login: (role: Role, username: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  /** Adopt a fresh token pair + account (e.g. after a password change). */
+  applySession: (session: SessionPayload) => void
 }
 
 const REFRESH_KEY = 'erp.refresh'
@@ -80,12 +89,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })()
   }, [])
 
-  const login = useCallback(async (role: Role, username: string, password: string) => {
-    const { data } = await api.post('/api/v1/auth/login/', { role, username, password })
-    setAccessToken(data.access)
-    localStorage.setItem(REFRESH_KEY, data.refresh)
-    setAccount(data.account)
+  const applySession = useCallback((session: SessionPayload) => {
+    setAccessToken(session.access)
+    localStorage.setItem(REFRESH_KEY, session.refresh)
+    setAccount(session.account)
   }, [])
+
+  const login = useCallback(
+    async (role: Role, username: string, password: string) => {
+      const { data } = await api.post('/api/v1/auth/login/', { role, username, password })
+      applySession(data)
+    },
+    [applySession],
+  )
 
   const logout = useCallback(async () => {
     const refresh = localStorage.getItem(REFRESH_KEY)
@@ -98,8 +114,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo(
-    () => ({ account, loading, login, logout }),
-    [account, loading, login, logout],
+    () => ({ account, loading, login, logout, applySession }),
+    [account, loading, login, logout, applySession],
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

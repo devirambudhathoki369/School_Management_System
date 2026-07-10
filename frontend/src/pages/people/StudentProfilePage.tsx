@@ -7,6 +7,7 @@ import {
   useGuardianSearch,
   useStudentFull,
   type GuardianLink,
+  type GuardianPerson,
   type StudentFull,
 } from '../../lib/people'
 import { formatDateBS } from '../../lib/format'
@@ -25,6 +26,8 @@ import {
 } from '../../components/ui'
 import {
   IconChevronLeft,
+  IconCopy,
+  IconKey,
   IconPencil,
   IconPlus,
   IconStudents,
@@ -155,6 +158,7 @@ export default function StudentProfilePage() {
                       .join(' · ')}
                   </p>
                 </div>
+                <PortalAccessButton studentId={s.id} guardian={link.guardian} />
                 <button
                   aria-label={`Edit ${link.guardian.name}`}
                   onClick={() => setEditingLink(link)}
@@ -220,6 +224,172 @@ function RemoveLinkButton({ studentId, link }: { studentId: string; link: Guardi
     >
       <IconTrash size={16} />
     </button>
+  )
+}
+
+/**
+ * Portal access for one guardian: create the login, reset a lost password,
+ * or revoke it. The temporary password appears exactly once in the grant
+ * response — the office copies it onto a slip; it is never retrievable again.
+ */
+function PortalAccessButton({
+  studentId,
+  guardian,
+}: {
+  studentId: string
+  guardian: GuardianPerson
+}) {
+  const toast = useToast()
+  const queryClient = useQueryClient()
+  const [open, setOpen] = useState(false)
+  const [issued, setIssued] = useState<{ username: string; temp_password: string } | null>(null)
+
+  const refresh = () =>
+    queryClient.invalidateQueries({ queryKey: ['people', 'student-full', studentId] })
+
+  const grant = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<{ username: string; temp_password: string }>(
+        `/api/v1/people/guardians/${guardian.id}/portal-access/`,
+      )
+      return data
+    },
+    onSuccess: (data) => {
+      setIssued(data)
+      refresh()
+    },
+    onError: (error) => toast.error(apiErrorMessage(error)),
+  })
+
+  const revoke = useMutation({
+    mutationFn: () => api.delete(`/api/v1/people/guardians/${guardian.id}/portal-access/`),
+    onSuccess: () => {
+      refresh()
+      toast.success('Portal access revoked; their sessions are signed out.')
+      setOpen(false)
+    },
+    onError: (error) => toast.error(apiErrorMessage(error)),
+  })
+
+  const close = () => {
+    setOpen(false)
+    setIssued(null)
+  }
+  const hasLogin = Boolean(guardian.portal_username)
+
+  return (
+    <>
+      <button
+        aria-label={`Portal access for ${guardian.name}`}
+        title={
+          hasLogin
+            ? `Portal login: ${guardian.portal_username}${guardian.portal_active ? '' : ' (revoked)'}`
+            : 'Give portal access'
+        }
+        onClick={() => setOpen(true)}
+        className={`flex size-9 items-center justify-center rounded-lg hover:bg-surface-sunken ${
+          guardian.portal_active
+            ? 'text-accent-strong'
+            : 'text-ink-faint hover:text-ink'
+        }`}
+      >
+        <IconKey size={16} />
+      </button>
+      {open && (
+        <Modal open onClose={close} title={`Portal access — ${guardian.name}`}>
+          {issued ? (
+            <div className="space-y-4">
+              <p className="text-sm text-ink-muted">
+                Share these with {guardian.name} — the temporary password is shown{' '}
+                <span className="font-semibold text-ink">only this once</span>. They will be
+                asked to set their own password on first sign-in.
+              </p>
+              <Credential label="Username" value={issued.username} />
+              <Credential label="Temporary password" value={issued.temp_password} />
+              <Button className="w-full" onClick={close}>
+                Done
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {hasLogin ? (
+                <div className="flex items-center justify-between rounded-lg bg-surface-sunken px-4 py-3">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">
+                      Portal login
+                    </p>
+                    <p className="font-mono text-sm">{guardian.portal_username}</p>
+                  </div>
+                  <Badge tone={guardian.portal_active ? 'positive' : 'warning'}>
+                    {guardian.portal_active ? 'active' : 'revoked'}
+                  </Badge>
+                </div>
+              ) : (
+                <p className="text-sm text-ink-muted">
+                  {guardian.name} has no portal login yet. Creating one issues a username and a
+                  temporary password to hand over in person — the portal shows their children's
+                  attendance, results, fees and homework.
+                </p>
+              )}
+              <div className="flex flex-col gap-2">
+                <Button busy={grant.isPending} onClick={() => grant.mutate()}>
+                  <IconKey size={16} />
+                  {hasLogin
+                    ? guardian.portal_active
+                      ? 'Reset password'
+                      : 'Reactivate with new password'
+                    : 'Create portal login'}
+                </Button>
+                {hasLogin && guardian.portal_active && (
+                  <Button
+                    variant="danger"
+                    busy={revoke.isPending}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Revoke ${guardian.name}'s portal access? They are signed out everywhere; you can reactivate later.`,
+                        )
+                      )
+                        revoke.mutate()
+                    }}
+                  >
+                    Revoke access
+                  </Button>
+                )}
+              </div>
+              {hasLogin && guardian.portal_active && (
+                <p className="text-xs text-ink-faint">
+                  Resetting ends every signed-in session and issues a fresh temporary password
+                  (for a lost phone or forgotten password).
+                </p>
+              )}
+            </div>
+          )}
+        </Modal>
+      )}
+    </>
+  )
+}
+
+function Credential({ label, value }: { label: string; value: string }) {
+  const toast = useToast()
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-sunken px-4 py-3">
+      <div className="min-w-0">
+        <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">{label}</p>
+        <p className="truncate font-mono text-base font-semibold tracking-wide">{value}</p>
+      </div>
+      <button
+        aria-label={`Copy ${label.toLowerCase()}`}
+        onClick={async () => {
+          await navigator.clipboard.writeText(value)
+          toast.success(`${label} copied.`)
+        }}
+        className="flex size-9 shrink-0 items-center justify-center rounded-lg text-ink-faint hover:bg-surface hover:text-ink"
+      >
+        <IconCopy size={16} />
+      </button>
+    </div>
   )
 }
 

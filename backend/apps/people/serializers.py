@@ -4,10 +4,21 @@ from .models import Guardian, Staff, StaffRole, Student, StudentGuardian
 
 
 class GuardianSerializer(serializers.ModelSerializer):
+    portal_username = serializers.CharField(
+        source="account.username", read_only=True, default=None
+    )
+    portal_active = serializers.SerializerMethodField()
+
     class Meta:
         model = Guardian
-        fields = ["id", "name", "contact", "email", "address", "occupation"]
-        read_only_fields = ["id"]
+        fields = [
+            "id", "name", "contact", "email", "address", "occupation",
+            "portal_username", "portal_active",
+        ]
+        read_only_fields = ["id", "portal_username", "portal_active"]
+
+    def get_portal_active(self, guardian) -> bool:
+        return bool(guardian.account_id and guardian.account.is_active)
 
 
 class StudentGuardianSerializer(serializers.ModelSerializer):
