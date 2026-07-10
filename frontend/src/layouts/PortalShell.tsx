@@ -50,7 +50,9 @@ export default function PortalShell() {
             <p className="truncate text-sm font-semibold leading-tight">
               {account?.school?.name}
             </p>
-            <p className="text-[11px] leading-tight text-ink-muted">Parent portal</p>
+            <p className="text-[11px] leading-tight text-ink-muted">
+              {account?.role === 'student' ? 'Student portal' : 'Parent portal'}
+            </p>
           </div>
           <nav aria-label="Portal" className="ml-6 hidden items-center gap-1 sm:flex">
             {TABS.map((tab) => (

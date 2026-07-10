@@ -113,6 +113,51 @@ class TestPortalScoping:
 
 
 @pytest.mark.django_db
+class TestStudentPrincipal:
+    """Students are the other documented family principal: they see exactly
+    themselves — never a sibling, never another student."""
+
+    def student_client(self, student) -> APIClient:
+        from apps.identity.models import Account, Role
+
+        account = Account.objects.create_user(
+            f"stud_{student.first_name.lower()}", Role.STUDENT, PASSWORD, verified=True
+        )
+        student.account = account
+        student.save(update_fields=["account"])
+        api = APIClient()
+        res = api.post(
+            "/api/v1/auth/login/",
+            {"username": account.username, "password": PASSWORD, "role": "student"},
+        )
+        assert res.status_code == 200, res.content
+        api.credentials(HTTP_AUTHORIZATION=f"Bearer {res.data['access']}")
+        return api
+
+    def test_student_sees_exactly_themself(self, family):
+        _, _, mine, sibling, _ = family
+        api = self.student_client(mine)
+        res = api.get("/api/v1/portal/children/")
+        assert res.status_code == 200, res.content
+        assert [c["id"] for c in res.data["children"]] == [str(mine.id)]
+        assert res.data["children"][0]["relation"] == "self"
+        assert res.data["role"] == "student"
+        assert res.data["guardian"]["name"] == mine.full_name
+        # Own child endpoints resolve; a sibling's are 404.
+        assert (
+            api.get(f"/api/v1/portal/children/{mine.id}/results/").status_code == 200
+        )
+        assert (
+            api.get(f"/api/v1/portal/children/{sibling.id}/results/").status_code == 404
+        )
+
+    def test_student_cannot_reach_staff_surface(self, family):
+        _, _, mine, *_ = family
+        api = self.student_client(mine)
+        assert api.get("/api/v1/people/students/").status_code == 403
+
+
+@pytest.mark.django_db
 class TestPortalData:
     def test_attendance_month_summary(self, family):
         school, guardian, mine, *_ = family

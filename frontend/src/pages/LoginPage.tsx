@@ -26,10 +26,10 @@ export default function LoginPage() {
     setBusy(true)
     try {
       await login(role, username.trim(), password)
-      // Guardians land in the portal; a staff-side `from` would just bounce.
-      const home = role === 'guardian' ? '/portal' : '/dashboard'
+      // Family principals land in the portal; a staff `from` would bounce.
+      const family = role === 'guardian' || role === 'student'
       const from = (location.state as { from?: string } | null)?.from
-      navigate(role === 'guardian' ? home : (from ?? home), { replace: true })
+      navigate(family ? '/portal' : (from ?? '/dashboard'), { replace: true })
     } catch {
       setError('Invalid credentials for the selected role.')
     } finally {

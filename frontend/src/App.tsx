@@ -89,17 +89,23 @@ function RequireAuth() {
   return <Outlet />
 }
 
-/** Guardians live in the portal; everyone else in the staff console. Each
- * side bounces the other's principal — two surfaces, never blended. */
-function RequireGuardian() {
+/** Guardians and students live in the portal; staff-side roles in the
+ * console. Each side bounces the other's principal — never blended. */
+const FAMILY_ROLES = new Set(['guardian', 'student'])
+
+function RequireFamily() {
   const { account } = useAuth()
-  if (account?.role !== 'guardian') return <Navigate to="/dashboard" replace />
+  if (!account || !FAMILY_ROLES.has(account.role)) {
+    return <Navigate to="/dashboard" replace />
+  }
   return <Outlet />
 }
 
 function RequireStaffSide() {
   const { account } = useAuth()
-  if (account?.role === 'guardian') return <Navigate to="/portal" replace />
+  if (account && FAMILY_ROLES.has(account.role)) {
+    return <Navigate to="/portal" replace />
+  }
   return <Outlet />
 }
 
@@ -108,7 +114,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route element={<RequireAuth />}>
-        <Route element={<RequireGuardian />}>
+        <Route element={<RequireFamily />}>
           <Route element={<PortalShell />}>
             <Route path="/portal" element={<PortalHome />} />
             <Route path="/portal/notices" element={<PortalNoticesPage />} />

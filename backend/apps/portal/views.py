@@ -1,13 +1,14 @@
 """
-Guardian portal: the read-only family window into the school (§18.1).
+Family portal: the read-only window into the school (§18.1) for guardians
+AND students — the documented "student app" channel serves both.
 
 Scoping model — the security contract of this app:
 
-- The guardian comes from the JWT principal; their school from the guardian
-  profile (I1: never from client data).
-- Every child-scoped endpoint resolves the student THROUGH an active
-  StudentGuardian link. A student who isn't linked to the caller is a 404 —
-  indistinguishable from not existing.
+- The principal comes from the JWT; their school from the linked profile
+  (I1: never from client data).
+- A guardian resolves children THROUGH StudentGuardian links; a student
+  resolves exactly themself. Anyone else is a 404 — indistinguishable
+  from not existing.
 - Results honour E1: only published sheets are ever visible here.
 - Dues honour M1: payments settle debt with total_paid + total_discount.
 
@@ -29,9 +30,10 @@ from apps.communication.models import CalendarEvent, Notice
 from apps.core.dates import today_bs
 from apps.examinations.models import StudentSubjectResult
 from apps.homework.models import Homework
+from apps.identity.models import Role
 from apps.people.models import Student, StudentGuardian
 
-from .permissions import IsGuardian
+from .permissions import IsFamilyPrincipal
 
 HOMEWORK_PAGE = 50
 NOTICES_PAGE = 50
@@ -46,30 +48,43 @@ def _month_param(request) -> str:
     return f"{parts[0]}-{int(parts[1]):02d}"
 
 
-class GuardianPortalView(APIView):
-    """Base for every portal endpoint: guardian + school from the principal,
-    children only through active guardian links."""
+CHILD_RELATED = (
+    "student__class_info__section",
+    "student__class_info__course",
+    "student__academic_year",
+)
 
-    permission_classes = [IsAuthenticated, IsGuardian]
+
+class FamilyPortalView(APIView):
+    """Base for every portal endpoint: profile + school from the principal.
+    Guardians reach children only through guardian links; students reach
+    exactly themselves."""
+
+    permission_classes = [IsAuthenticated, IsFamilyPrincipal]
 
     def initial(self, request, *args, **kwargs):
         super().initial(request, *args, **kwargs)
-        guardian = getattr(request.user, "guardian_profile", None)
-        if guardian is None:
-            raise NotFound("No guardian profile is linked to this account.")
-        request.guardian = guardian
-        request.school = guardian.school
+        if request.user.role == Role.GUARDIAN:
+            profile = getattr(request.user, "guardian_profile", None)
+        else:
+            profile = getattr(request.user, "student_profile", None)
+        if profile is None:
+            raise NotFound("No profile is linked to this account.")
+        request.profile = profile
+        request.school = profile.school
 
     def get_child(self, request, student_id) -> Student:
+        if isinstance(request.profile, Student):
+            if str(request.profile.id) != str(student_id):
+                raise NotFound("No such student.")
+            return Student.objects.select_related(
+                "class_info__section", "class_info__course", "academic_year"
+            ).get(id=request.profile.id)
         link = (
             StudentGuardian.objects.filter(
-                guardian=request.guardian, student_id=student_id
+                guardian=request.profile, student_id=student_id
             )
-            .select_related(
-                "student__class_info__section",
-                "student__class_info__course",
-                "student__academic_year",
-            )
+            .select_related(*CHILD_RELATED)
             .first()
         )
         if link is None:
@@ -77,22 +92,24 @@ class GuardianPortalView(APIView):
         return link.student
 
 
-class ChildrenView(GuardianPortalView):
+class ChildrenView(FamilyPortalView):
     @extend_schema(summary="My children", operation_id="portal_children")
     def get(self, request):
-        links = (
-            StudentGuardian.objects.filter(guardian=request.guardian)
-            .select_related(
-                "student__class_info__section",
-                "student__class_info__course",
-                "student__academic_year",
-            )
-            .order_by("student__first_name")
-        )
+        if isinstance(request.profile, Student):
+            me = Student.objects.select_related(
+                "class_info__section", "class_info__course", "academic_year"
+            ).get(id=request.profile.id)
+            rows = [(me, "self", True)]
+        else:
+            rows = [
+                (link.student, link.relation, link.is_primary_contact)
+                for link in StudentGuardian.objects.filter(guardian=request.profile)
+                .select_related(*CHILD_RELATED)
+                .order_by("student__first_name")
+            ]
         today = today_bs()
         children = []
-        for link in links:
-            student = link.student
+        for student, relation, is_primary in rows:
             record = (
                 StudentAttendanceRecord.objects.filter(
                     student=student,
@@ -113,8 +130,8 @@ class ChildrenView(GuardianPortalView):
                     "class_label": str(student.class_info),
                     "academic_year": str(student.academic_year_id),
                     "academic_year_name": student.academic_year.name,
-                    "relation": link.relation,
-                    "is_primary_contact": link.is_primary_contact,
+                    "relation": relation,
+                    "is_primary_contact": is_primary,
                     "dues": str(student_dues(student)),
                     "attendance_today": (
                         None
@@ -127,22 +144,25 @@ class ChildrenView(GuardianPortalView):
                     ),
                 }
             )
-        guardian = request.guardian
+        profile = request.profile
         return Response(
             {
                 "guardian": {
-                    "name": guardian.name,
-                    "contact": guardian.contact,
-                    "email": guardian.email,
-                    "address": guardian.address,
+                    "name": profile.full_name
+                    if isinstance(profile, Student)
+                    else profile.name,
+                    "contact": profile.contact,
+                    "email": profile.email,
+                    "address": profile.address,
                 },
+                "role": request.user.role,
                 "today_bs": today,
                 "children": children,
             }
         )
 
 
-class ChildAttendanceView(GuardianPortalView):
+class ChildAttendanceView(FamilyPortalView):
     @extend_schema(summary="A child's attendance for one BS month")
     def get(self, request, student_id):
         child = self.get_child(request, student_id)
@@ -178,7 +198,7 @@ class ChildAttendanceView(GuardianPortalView):
         )
 
 
-class ChildFeesView(GuardianPortalView):
+class ChildFeesView(FamilyPortalView):
     @extend_schema(summary="A child's dues and fee statement")
     def get(self, request, student_id):
         child = self.get_child(request, student_id)
@@ -264,7 +284,7 @@ class ChildFeesView(GuardianPortalView):
         )
 
 
-class ChildResultsView(GuardianPortalView):
+class ChildResultsView(FamilyPortalView):
     @extend_schema(summary="A child's published exam results (E1)")
     def get(self, request, student_id):
         child = self.get_child(request, student_id)
@@ -336,7 +356,7 @@ class ChildResultsView(GuardianPortalView):
         return Response({"exams": payload})
 
 
-class ChildHomeworkView(GuardianPortalView):
+class ChildHomeworkView(FamilyPortalView):
     @extend_schema(summary="A child's class homework")
     def get(self, request, student_id):
         child = self.get_child(request, student_id)
@@ -372,7 +392,7 @@ class ChildHomeworkView(GuardianPortalView):
         )
 
 
-class NoticesView(GuardianPortalView):
+class NoticesView(FamilyPortalView):
     @extend_schema(summary="School notices")
     def get(self, request):
         notices = Notice.objects.filter(school=request.school).order_by(
@@ -396,7 +416,7 @@ class NoticesView(GuardianPortalView):
         )
 
 
-class PortalCalendarView(GuardianPortalView):
+class PortalCalendarView(FamilyPortalView):
     @extend_schema(summary="School calendar for one BS month")
     def get(self, request):
         month = _month_param(request)

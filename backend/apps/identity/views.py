@@ -15,10 +15,22 @@ from .serializers import AccountSerializer, ChangePasswordSerializer, LoginSeria
 
 
 class LoginThrottle(AnonRateThrottle):
-    """Strict cap on credential attempts (login abuse — DOCUMENTATION.md §17.2)."""
+    """Cap on credential attempts (login abuse — DOCUMENTATION.md §17.2).
+    Per-IP: generous enough for a school NAT (many families share one
+    public IP) while still stopping brute force."""
 
     scope = "login"
-    rate = "10/min"
+    rate = "30/min"
+
+
+class RefreshThrottle(AnonRateThrottle):
+    """Refresh carries a signed token, not a guessable credential — the
+    throttle only bounds DoS. Every app open behind a school NAT hits this
+    endpoint once, so the per-IP cap must be an order of magnitude above
+    the login cap or session restores 429 en masse."""
+
+    scope = "token-refresh"
+    rate = "600/min"
 
 
 class LoginView(GenericAPIView):

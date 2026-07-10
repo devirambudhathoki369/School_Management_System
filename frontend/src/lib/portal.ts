@@ -27,6 +27,8 @@ export interface PortalChild {
 
 export interface PortalChildren {
   guardian: { name: string; contact: string; email: string; address: string }
+  /** Which family principal is signed in — students see themselves. */
+  role: 'guardian' | 'student'
   today_bs: string
   children: PortalChild[]
 }
