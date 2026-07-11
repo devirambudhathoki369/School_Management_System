@@ -65,6 +65,7 @@ import PayrollLayout from './pages/payroll/PayrollLayout'
 import PaySalaryPage from './pages/payroll/PaySalaryPage'
 import RunPayrollPage from './pages/payroll/RunPayrollPage'
 import PaymentsPage from './pages/payroll/PaymentsPage'
+import SalarySheetPage from './pages/payroll/SalarySheetPage'
 import PostingsPage from './pages/payroll/PostingsPage'
 import LedgerPage from './pages/payroll/LedgerPage'
 import StructuresPage from './pages/payroll/StructuresPage'
@@ -233,6 +234,7 @@ export default function App() {
             <Route path="pay" element={<PaySalaryPage />} />
             <Route path="run" element={<RunPayrollPage />} />
             <Route path="payments" element={<PaymentsPage />} />
+            <Route path="sheet" element={<SalarySheetPage />} />
             <Route path="postings" element={<PostingsPage />} />
             <Route path="ledger" element={<LedgerPage />} />
             <Route path="structures" element={<StructuresPage />} />

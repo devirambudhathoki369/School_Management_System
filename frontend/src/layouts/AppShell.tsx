@@ -155,6 +155,7 @@ const NAV: Section[] = [
           { label: 'Pay salary', to: '/payroll/pay' },
           { label: 'Run payroll', to: '/payroll/run' },
           { label: 'Payments', to: '/payroll/payments' },
+          { label: 'Salary sheet', to: '/payroll/sheet' },
           { label: 'Postings', to: '/payroll/postings' },
           { label: 'Staff ledger', to: '/payroll/ledger' },
           { label: 'Salary structures', to: '/payroll/structures' },

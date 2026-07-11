@@ -6,6 +6,7 @@ const TABS = [
   { to: '/payroll/pay', label: 'Pay salary' },
   { to: '/payroll/run', label: 'Run payroll' },
   { to: '/payroll/payments', label: 'Payments' },
+  { to: '/payroll/sheet', label: 'Salary sheet' },
   { to: '/payroll/postings', label: 'Postings' },
   { to: '/payroll/ledger', label: 'Staff ledger' },
   { to: '/payroll/structures', label: 'Structures' },

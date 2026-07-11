@@ -75,3 +75,46 @@ export function formatDateBS(dateBs: string | null | undefined): string {
 export function formatReceiptNo(serial: number | null | undefined): string {
   return serial == null ? '—' : String(serial).padStart(5, '0')
 }
+
+/**
+ * NPR amount in words, Nepali numbering (crore/lakh): the line every
+ * printed payslip and receipt carries — "Rupees twelve lakh five hundred
+ * and fifty only". Paisa is rounded away (payroll pays whole rupees).
+ */
+const ONES = [
+  '', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+  'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen',
+  'seventeen', 'eighteen', 'nineteen',
+]
+const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety']
+
+function twoDigits(n: number): string {
+  if (n < 20) return ONES[n]
+  return `${TENS[Math.floor(n / 10)]}${n % 10 ? '-' + ONES[n % 10] : ''}`
+}
+
+function threeDigits(n: number): string {
+  const hundred = Math.floor(n / 100)
+  const rest = n % 100
+  const parts = []
+  if (hundred) parts.push(`${ONES[hundred]} hundred`)
+  if (rest) parts.push(twoDigits(rest))
+  return parts.join(' and ')
+}
+
+export function amountInWords(value: string | number | null | undefined): string {
+  const n = Math.round(Math.abs(Number(value ?? 0)))
+  if (!Number.isFinite(n)) return ''
+  if (n === 0) return 'Rupees zero only'
+  const crore = Math.floor(n / 10_000_000)
+  const lakh = Math.floor((n % 10_000_000) / 100_000)
+  const thousand = Math.floor((n % 100_000) / 1000)
+  const rest = n % 1000
+  const parts = []
+  if (crore) parts.push(`${twoDigits(crore)} crore`)
+  if (lakh) parts.push(`${twoDigits(lakh)} lakh`)
+  if (thousand) parts.push(`${twoDigits(thousand)} thousand`)
+  if (rest) parts.push(threeDigits(rest))
+  const words = parts.join(' ')
+  return `Rupees ${words.charAt(0)}${words.slice(1)} only`
+}
