@@ -7,6 +7,9 @@ const TABS = [
   { to: '/exams/sheets', label: 'Result sheets' },
   { to: '/exams/schedule', label: 'Schedule' },
   { to: '/exams/results', label: 'Results & print' },
+  { to: '/exams/entry-cards', label: 'Entry cards' },
+  { to: '/exams/seat-plan', label: 'Seat plan' },
+  { to: '/exams/certificates', label: 'Certificates' },
   { to: '/exams/grading', label: 'Grading' },
 ]
 

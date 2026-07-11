@@ -189,3 +189,111 @@ class CharacterCertificate(TenantScopedModel):
 
     def __str__(self):
         return f"CC {self.serial_no}"
+
+
+class CertificateSerialCounter(models.Model):
+    """Per (school, billing year) certificate numbering, serial text
+    `{n}/{year name}` — the legacy shape (`45/EY 2082/083`), which resets the
+    count when the economic year rolls over. Legacy computed max+1 at read
+    time; here the row is locked FOR UPDATE inside the issue transaction
+    (same fix as billing's ReceiptSerialCounter)."""
+
+    id = models.BigAutoField(primary_key=True)
+    school = models.ForeignKey("tenants.School", on_delete=models.CASCADE, related_name="+")
+    billing_year = models.ForeignKey(
+        "billing.BillingYear", on_delete=models.CASCADE, related_name="+"
+    )
+    last_serial = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["school", "billing_year"], name="uniq_certificate_serial_counter"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.school} {self.billing_year}: {self.last_serial}"
+
+
+class SeatOrdering(models.TextChoices):
+    """How students are ordered within a class when seats are assigned."""
+
+    ROLL = "roll", "Roll no"
+    SYMBOL = "symbol", "Symbol no"
+    NAME = "name", "Name (alphabetical)"
+    REGD = "regd", "Registration no"
+
+
+class SeatPlanRoom(TenantScopedModel):
+    """One physical room in an exam's seat plan: a grid of benches × seats.
+
+    The plan hangs off the exam so a result can be traced to where the
+    student sat and the plan reprints verbatim (DOCUMENTATION.md §4.9, E3).
+    """
+
+    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name="seat_plan_rooms")
+    name = models.CharField(max_length=50)
+    benches = models.PositiveIntegerField(default=1)
+    seats_per_bench = models.PositiveIntegerField(default=2)
+    order_by = models.CharField(
+        max_length=8, choices=SeatOrdering.choices, default=SeatOrdering.ROLL
+    )
+    note = models.CharField(max_length=200, blank=True, default="")
+    legacy_id = models.BigIntegerField(null=True, blank=True, unique=True)
+
+    def __str__(self):
+        return f"{self.exam}: {self.name}"
+
+    @property
+    def capacity(self) -> int:
+        return self.benches * self.seats_per_bench
+
+
+class SeatPlanRoomClass(TenantScopedModel):
+    """A class placed into a room, pinned to one bench column (side).
+
+    Pinning a column to a single class is what enforces E3: neighbours on a
+    bench always come from different classes.
+    """
+
+    room = models.ForeignKey(SeatPlanRoom, on_delete=models.CASCADE, related_name="room_classes")
+    class_info = models.ForeignKey(ClassInfo, on_delete=models.PROTECT, related_name="+")
+    column = models.PositiveIntegerField(default=1)
+    # Empty = use the room's ordering.
+    order_by = models.CharField(
+        max_length=8, choices=SeatOrdering.choices, blank=True, default=""
+    )
+    legacy_id = models.BigIntegerField(null=True, blank=True, unique=True)
+
+    class Meta(TenantScopedModel.Meta):
+        verbose_name_plural = "Seat plan room classes"
+        constraints = [
+            models.UniqueConstraint(fields=["room", "column"], name="uniq_room_column"),
+        ]
+
+    def __str__(self):
+        return f"{self.room}: column {self.column}"
+
+
+class SeatAllocation(TenantScopedModel):
+    """A student's saved seat; regenerating replaces the room's allocations."""
+
+    room = models.ForeignKey(SeatPlanRoom, on_delete=models.CASCADE, related_name="allocations")
+    student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name="+")
+    # Snapshot of the student's class at seating time (E3).
+    class_info = models.ForeignKey(ClassInfo, on_delete=models.PROTECT, related_name="+")
+    bench_no = models.PositiveIntegerField()
+    column = models.PositiveIntegerField()
+    sequence = models.PositiveIntegerField()  # overall fill order within the room
+    legacy_id = models.BigIntegerField(null=True, blank=True, unique=True)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["sequence"]
+        constraints = [
+            models.UniqueConstraint(fields=["room", "bench_no", "column"], name="uniq_room_seat"),
+            models.UniqueConstraint(fields=["room", "student"], name="uniq_room_student"),
+        ]
+
+    def __str__(self):
+        return f"{self.room}: bench {self.bench_no} seat {self.column}"

@@ -1,3 +1,4 @@
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import action
@@ -15,6 +16,7 @@ from .models import (
     Exam,
     ExamScheduleEntry,
     GradingScheme,
+    SeatPlanRoom,
     SubjectResultSheet,
 )
 from .serializers import (
@@ -25,10 +27,11 @@ from .serializers import (
     ExamSerializer,
     GradingSchemeSerializer,
     MarksEntrySerializer,
+    SeatPlanRoomSerializer,
     StudentMarkSerializer,
     SubjectResultSheetSerializer,
 )
-from .services import grading, positions
+from .services import grading, positions, seating
 
 MANAGERS = (Role.ADMIN, Role.STAFF)
 
@@ -154,6 +157,65 @@ class ExamViewSet(TenantScopedViewSet):
             }
         )
 
+    @extend_schema(summary="Class roster with identities (entry cards / seating)")
+    @action(detail=False, methods=["get"], url_path="class-roster")
+    def class_roster(self, request):
+        """Running students of one class with the identity fields exam prints
+        need (symbol/regd), under the EXAMINATIONS grant — exam clerks rarely
+        hold the students module. `include_dues=1` adds each student's
+        outstanding balance: schools traditionally withhold entry cards from
+        defaulters, so the print screen filters on it."""
+        from apps.people.models import Student
+
+        class_info = get_object_or_404(
+            ClassInfo, id=request.query_params.get("class_info"), school=request.school
+        )
+        students = list(
+            Student.objects.filter(
+                school=request.school,
+                class_info=class_info,
+                status=Student.Status.RUNNING,
+            ).order_by("first_name", "last_name")
+        )
+        rows = [
+            {
+                "id": str(s.id),
+                "full_name": s.full_name,
+                "roll_no": s.roll_no,
+                "symbol_no": s.symbol_no,
+                "regd_no": s.regd_no,
+            }
+            for s in students
+        ]
+        if request.query_params.get("include_dues"):
+            from decimal import Decimal
+
+            from django.db.models import Sum
+
+            from apps.billing.models import Charge, FeeTitle, Payment
+
+            ids = [s.id for s in students]
+            charged = dict(
+                Charge.objects.filter(student_id__in=ids)
+                .values_list("student_id")
+                .annotate(total=Sum("total"))
+            )
+            settled: dict = {}
+            paid_rows = (
+                Payment.objects.filter(student_id__in=ids, kind=FeeTitle.Kind.REGULAR)
+                .values_list("student_id")
+                .annotate(paid=Sum("total_paid"), discount=Sum("total_discount"))
+            )
+            for student_id, paid, discount in paid_rows:
+                # M1: total_paid is pre-discount; the discount settles debt too.
+                settled[student_id] = (paid or Decimal("0")) + (discount or Decimal("0"))
+            for student, row in zip(students, rows):
+                dues = (charged.get(student.id) or Decimal("0")) - settled.get(
+                    student.id, Decimal("0")
+                )
+                row["dues"] = str(dues)
+        return Response(rows)
+
 
 class ExamScheduleEntryViewSet(TenantScopedViewSet):
     queryset = ExamScheduleEntry.objects.select_related("subject", "class_info")
@@ -163,9 +225,10 @@ class ExamScheduleEntryViewSet(TenantScopedViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
-        exam = self.request.query_params.get("exam")
-        if exam:
-            qs = qs.filter(exam=exam)
+        for param in ("exam", "class_info"):
+            value = self.request.query_params.get(param)
+            if value:
+                qs = qs.filter(**{param: value})
         return qs
 
 
@@ -254,3 +317,71 @@ class CharacterCertificateViewSet(TenantScopedViewSet):
     serializer_class = CharacterCertificateSerializer
     allowed_roles = MANAGERS
     permission_code = "examinations"
+
+    def get_queryset(self):
+        qs = super().get_queryset().order_by("-created_at")
+        search = self.request.query_params.get("search", "").strip()
+        if search:
+            qs = qs.filter(
+                Q(serial_no__icontains=search) | Q(data__name__icontains=search)
+            )
+        return qs
+
+
+class SeatPlanRoomViewSet(TenantScopedViewSet):
+    """Seat plan rooms (benches × seats, one class per bench column).
+
+    Extra endpoints:
+    - GET  eligible-classes/?exam=  classes the plan may use (E3 scope)
+    - POST generate/ {exam|room, shuffle}  run the arrangement (idempotent)
+    """
+
+    queryset = SeatPlanRoom.objects.select_related("exam").prefetch_related(
+        "room_classes", "allocations__student"
+    )
+    serializer_class = SeatPlanRoomSerializer
+    allowed_roles = MANAGERS
+    permission_code = "examinations"
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        exam = self.request.query_params.get("exam")
+        if exam:
+            qs = qs.filter(exam=exam)
+        return qs.order_by("created_at")
+
+    def perform_destroy(self, instance):
+        # A room is a working document: deleting removes its classes and
+        # allocations outright (legacy cascade), not a soft delete.
+        seating.hard_delete_room(instance)
+
+    @extend_schema(summary="Classes this exam's seat plan may use")
+    @action(detail=False, methods=["get"], url_path="eligible-classes")
+    def eligible_classes(self, request):
+        exam = get_object_or_404(Exam, id=request.query_params.get("exam"),
+                                 school=request.school)
+        return Response({"eligible_classes": seating.eligible_class_ids(exam)})
+
+    @extend_schema(summary="Generate the seating (replaces prior allocations)")
+    @action(detail=False, methods=["post"], url_path="generate")
+    def generate(self, request):
+        room_id = request.data.get("room")
+        exam_id = request.data.get("exam")
+        rooms = SeatPlanRoom.objects.filter(school=request.school)
+        if room_id:
+            rooms = rooms.filter(id=room_id)
+        elif exam_id:
+            rooms = rooms.filter(exam_id=exam_id)
+        else:
+            raise ValidationError({"exam": "Pass an exam or a room."})
+        rooms = list(rooms.prefetch_related("room_classes").order_by("created_at"))
+        if not rooms:
+            raise ValidationError({"exam": "No rooms to arrange."})
+        per_room, unseated = seating.generate(rooms, shuffle=bool(request.data.get("shuffle")))
+        return Response(
+            {
+                "seated": sum(per_room.values()),
+                "unseated": unseated,
+                "per_room": {str(room_id): count for room_id, count in per_room.items()},
+            }
+        )

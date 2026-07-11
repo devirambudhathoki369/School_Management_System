@@ -54,6 +54,9 @@ import DayOverviewPage from './pages/attendance/DayOverviewPage'
 import StaffAttendancePage from './pages/attendance/StaffAttendancePage'
 import ExamsLayout from './pages/exams/ExamsLayout'
 import ExamsPage from './pages/exams/ExamsPage'
+import EntryCardsPage from './pages/exams/EntryCardsPage'
+import SeatPlanPage from './pages/exams/SeatPlanPage'
+import CertificatesPage from './pages/exams/CertificatesPage'
 import SheetsPage from './pages/exams/SheetsPage'
 import MarksPage from './pages/exams/MarksPage'
 import SchedulePage from './pages/exams/SchedulePage'
@@ -219,6 +222,9 @@ export default function App() {
             <Route path="sheets" element={<SheetsPage />} />
             <Route path="sheets/:sheetId/marks" element={<MarksPage />} />
             <Route path="results" element={<ResultsPage />} />
+            <Route path="entry-cards" element={<EntryCardsPage />} />
+            <Route path="seat-plan" element={<SeatPlanPage />} />
+            <Route path="certificates" element={<CertificatesPage />} />
             <Route path="schedule" element={<SchedulePage />} />
             <Route path="grading" element={<GradingPage />} />
           </Route>

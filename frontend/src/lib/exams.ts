@@ -212,3 +212,119 @@ export function useClassResult(examId: string | null, classId: string | null) {
     enabled: !!examId && !!classId,
   })
 }
+
+/** Snapshot fields printed on a character certificate (legacy `data` JSON). */
+export interface CertificateData {
+  name?: string
+  guardian_name?: string
+  address?: string
+  from_date?: string
+  to_date?: string
+  class?: string
+  exam_year?: string
+  result?: string
+  birth_date?: string
+  remarks?: string
+  symbol_no?: string
+  regd_no?: string
+  issue_date?: string
+}
+
+export interface Certificate {
+  id: string
+  serial_no: string
+  student: string | null
+  student_name: string | null
+  data: CertificateData
+  created_at: string
+}
+
+export interface ClassRosterRow {
+  id: string
+  full_name: string
+  roll_no: string
+  symbol_no: string
+  regd_no: string
+  dues?: string
+}
+
+/** Running students of one class with exam identities (+dues when asked). */
+export function useExamClassRoster(classId: string | null, includeDues = false) {
+  return useQuery({
+    queryKey: ['exams', 'class-roster', classId, includeDues],
+    queryFn: async () =>
+      (
+        await api.get<ClassRosterRow[]>('/api/v1/examinations/exams/class-roster/', {
+          params: { class_info: classId, ...(includeDues ? { include_dues: '1' } : {}) },
+        })
+      ).data,
+    enabled: !!classId,
+  })
+}
+
+export type SeatOrderBy = 'roll' | 'symbol' | 'name' | 'regd'
+
+export const SEAT_ORDER_LABEL: Record<SeatOrderBy, string> = {
+  roll: 'Roll no',
+  symbol: 'Symbol no',
+  name: 'Name (alphabetical)',
+  regd: 'Registration no',
+}
+
+export interface SeatRoomClass {
+  id?: string
+  class_info: string
+  column: number
+  order_by: SeatOrderBy | ''
+}
+
+export interface SeatAllocationRow {
+  id: string
+  student: string
+  class_info: string
+  bench_no: number
+  column: number
+  sequence: number
+  name: string
+  roll_no: string
+  symbol_no: string
+  regd_no: string
+}
+
+export interface SeatRoom {
+  id: string
+  exam: string
+  name: string
+  benches: number
+  seats_per_bench: number
+  order_by: SeatOrderBy
+  note: string
+  capacity: number
+  classes: SeatRoomClass[]
+  allocations: SeatAllocationRow[]
+}
+
+export function useSeatRooms(examId: string | null) {
+  return useQuery({
+    queryKey: ['exams', 'seat-rooms', examId],
+    queryFn: () =>
+      fetchAllPages<SeatRoom>('/api/v1/examinations/seat-plan-rooms/', { exam: examId! }),
+    enabled: !!examId,
+  })
+}
+
+/** Classes the seat plan may offer (the exam's education levels); empty =
+ *  nothing ties the exam to a class yet, callers fall back to all classes. */
+export function useEligibleSeatClasses(examId: string | null) {
+  return useQuery({
+    queryKey: ['exams', 'seat-eligible', examId],
+    queryFn: async () =>
+      (
+        await api.get<{ eligible_classes: string[] }>(
+          '/api/v1/examinations/seat-plan-rooms/eligible-classes/',
+          { params: { exam: examId } },
+        )
+      ).data.eligible_classes,
+    enabled: !!examId,
+  })
+}

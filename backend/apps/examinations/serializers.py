@@ -10,9 +10,13 @@ from .models import (
     ExamScheduleEntry,
     GradeBand,
     GradingScheme,
+    SeatAllocation,
+    SeatPlanRoom,
+    SeatPlanRoomClass,
     StudentSubjectResult,
     SubjectResultSheet,
 )
+from .services import certificates
 from .services.grading import compute_marks
 
 
@@ -207,8 +211,103 @@ class ActivityGradeSerializer(TenantChildValidationMixin, serializers.ModelSeria
 
 class CharacterCertificateSerializer(TenantChildValidationMixin, serializers.ModelSerializer):
     tenant_fields = ("student",)
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
 
     class Meta:
         model = CharacterCertificate
-        fields = ["id", "serial_no", "student", "data"]
+        # serial_no is allocated server-side (legacy let the client post it,
+        # which is how malformed serials got into production).
+        fields = ["id", "serial_no", "student", "student_name", "data", "created_at"]
+        read_only_fields = ["id", "serial_no"]
+
+    def create(self, validated_data):
+        return certificates.issue(
+            school=validated_data["school"],
+            student=validated_data.get("student"),
+            data=validated_data["data"],
+        )
+
+
+class SeatAllocationSerializer(serializers.ModelSerializer):
+    """Read-only seat rows; names ride along so the chart needs no student grant."""
+
+    name = serializers.CharField(source="student.full_name", read_only=True)
+    roll_no = serializers.CharField(source="student.roll_no", read_only=True)
+    symbol_no = serializers.CharField(source="student.symbol_no", read_only=True)
+    regd_no = serializers.CharField(source="student.regd_no", read_only=True)
+
+    class Meta:
+        model = SeatAllocation
+        fields = [
+            "id", "student", "class_info", "bench_no", "column", "sequence",
+            "name", "roll_no", "symbol_no", "regd_no",
+        ]
+        read_only_fields = fields
+
+
+class SeatPlanRoomClassSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SeatPlanRoomClass
+        fields = ["id", "class_info", "column", "order_by"]
         read_only_fields = ["id"]
+
+
+class SeatPlanRoomSerializer(TenantChildValidationMixin, serializers.ModelSerializer):
+    tenant_fields = ("exam",)
+    classes = SeatPlanRoomClassSerializer(source="room_classes", many=True)
+    allocations = SeatAllocationSerializer(many=True, read_only=True)
+    capacity = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = SeatPlanRoom
+        fields = [
+            "id", "exam", "name", "benches", "seats_per_bench", "order_by",
+            "note", "capacity", "classes", "allocations",
+        ]
+        read_only_fields = ["id"]
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        request = self.context["request"]
+        seats = attrs.get("seats_per_bench", getattr(self.instance, "seats_per_bench", 2))
+        classes = attrs.get("room_classes")
+        if classes is not None:
+            columns = [c["column"] for c in classes]
+            if len(set(columns)) != len(columns):
+                raise serializers.ValidationError(
+                    {"classes": "One class per bench column — columns must be unique."}
+                )
+            for entry in classes:
+                if not 1 <= entry["column"] <= seats:
+                    raise serializers.ValidationError(
+                        {"classes": f"Column {entry['column']} is outside 1–{seats}."}
+                    )
+                if entry["class_info"].school_id != request.school.id:
+                    raise serializers.ValidationError(
+                        {"classes": "Class does not belong to your school."}
+                    )
+        return attrs
+
+    def create(self, validated_data):
+        classes = validated_data.pop("room_classes")
+        room = SeatPlanRoom.objects.create(**validated_data)
+        self._write_classes(room, classes)
+        return room
+
+    def update(self, instance, validated_data):
+        classes = validated_data.pop("room_classes", None)
+        instance = super().update(instance, validated_data)
+        if classes is not None:
+            # Replace wholesale (legacy contract); allocations survive until
+            # the next generate run replaces them too.
+            instance.room_classes(manager="all_objects").all().delete()
+            self._write_classes(instance, classes)
+        return instance
+
+    @staticmethod
+    def _write_classes(room, classes):
+        SeatPlanRoomClass.objects.bulk_create(
+            SeatPlanRoomClass(room=room, school_id=room.school_id, **entry)
+            for entry in classes
+        )

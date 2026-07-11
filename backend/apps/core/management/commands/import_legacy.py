@@ -38,6 +38,9 @@ from apps.examinations.models import (
     ExamScheduleEntry,
     GradeBand,
     GradingScheme,
+    SeatAllocation,
+    SeatPlanRoom,
+    SeatPlanRoomClass,
     StudentSubjectResult,
     SubjectResultSheet,
 )
@@ -823,6 +826,77 @@ class Command(BaseCommand):
             [(o.legacy_id, o.id, "examinations_charactercertificate") for o in cert_rows]
         )
         self._report("certificates", len(cert_rows), CharacterCertificate)
+
+        # Seat plans (rooms -> column-pinned classes -> saved allocations)
+        seat_order = {1: "roll", 2: "symbol", 3: "name", 4: "regd"}
+        rooms = IdMap("main_seatplanroom")
+        room_rows = []
+        for lid, exam_lid, school_lid, name, benches, seats, order_by, note, active in self._rows(
+            legacy,
+            "SELECT id, exam_id, school_id, name, benches, seats_per_bench,"
+            " order_by, note, is_active FROM main_seatplanroom ORDER BY id",
+        ):
+            if lid in rooms or exam_lid not in exams or school_lid not in schools:
+                continue
+            room_rows.append(SeatPlanRoom(
+                school_id=schools[school_lid], exam_id=exams[exam_lid],
+                name=str(name)[:50], benches=benches, seats_per_bench=seats,
+                order_by=seat_order.get(order_by, "roll"), note=(note or "")[:200],
+                is_active=active, legacy_id=lid,
+            ))
+        SeatPlanRoom.objects.bulk_create(room_rows, batch_size=BATCH)
+        rooms.record([(o.legacy_id, o.id, "examinations_seatplanroom") for o in room_rows])
+        self._report("seat plan rooms", len(room_rows), SeatPlanRoom)
+        room_school = dict(
+            SeatPlanRoom.all_objects.filter(legacy_id__isnull=False)
+            .values_list("id", "school_id")
+        )
+
+        room_classes = IdMap("main_seatplanroomclass")
+        rc_rows = []
+        for lid, room_lid, class_lid, column, order_by, active in self._rows(
+            legacy,
+            'SELECT id, room_id, class_info_id, "column", order_by, is_active'
+            " FROM main_seatplanroomclass ORDER BY id",
+        ):
+            if lid in room_classes or room_lid not in rooms or class_lid not in classes:
+                continue
+            room_id = rooms[room_lid]
+            rc_rows.append(SeatPlanRoomClass(
+                school_id=room_school[room_id],
+                room_id=room_id, class_info_id=classes[class_lid], column=column,
+                order_by=seat_order.get(order_by, ""), is_active=active, legacy_id=lid,
+            ))
+        SeatPlanRoomClass.objects.bulk_create(rc_rows, batch_size=BATCH)
+        room_classes.record(
+            [(o.legacy_id, o.id, "examinations_seatplanroomclass") for o in rc_rows]
+        )
+        self._report("seat plan room classes", len(rc_rows), SeatPlanRoomClass)
+
+        allocations = IdMap("main_seatallocation")
+        alloc_rows = []
+        for lid, room_lid, student_lid, class_lid, bench, column, sequence, active in self._rows(
+            legacy,
+            'SELECT id, room_id, student_id, class_info_id, bench_no, "column",'
+            " sequence, is_active FROM main_seatallocation ORDER BY id",
+        ):
+            if (
+                lid in allocations or room_lid not in rooms
+                or student_lid not in students or class_lid not in classes
+            ):
+                continue
+            room_id = rooms[room_lid]
+            alloc_rows.append(SeatAllocation(
+                school_id=room_school[room_id], room_id=room_id,
+                student_id=students[student_lid], class_info_id=classes[class_lid],
+                bench_no=bench, column=column, sequence=sequence,
+                is_active=active, legacy_id=lid,
+            ))
+        SeatAllocation.objects.bulk_create(alloc_rows, batch_size=BATCH)
+        allocations.record(
+            [(o.legacy_id, o.id, "examinations_seatallocation") for o in alloc_rows]
+        )
+        self._report("seat allocations", len(alloc_rows), SeatAllocation)
 
     # ------------------------------------------------------------------
     # Phase 4b: student results (2.47M rows; dedupe latest-entry-wins)
