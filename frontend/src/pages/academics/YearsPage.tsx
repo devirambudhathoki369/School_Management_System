@@ -279,13 +279,13 @@ function PointerModal({
     mutationFn: () =>
       pointer
         ? api.patch(`/api/v1/academics/year-pointers/${pointer.id}/`, {
-            key: key.trim(),
-            academic_year: yearId,
-          })
+          key: key.trim(),
+          academic_year: yearId,
+        })
         : api.post('/api/v1/academics/year-pointers/', {
-            key: key.trim(),
-            academic_year: yearId,
-          }),
+          key: key.trim(),
+          academic_year: yearId,
+        }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['academics'] })
       toast.success(pointer ? 'Pointer updated.' : 'Pointer created.')

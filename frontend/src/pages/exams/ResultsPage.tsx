@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { useAuth } from '../../lib/auth'
+import { useAuth, type PrintDesign } from '../../lib/auth'
 import { useClasses } from '../../lib/billing'
 import {
   useClassResult,
   useExams,
   type ClassResult,
-  type ClassResultStudent,
 } from '../../lib/exams'
+import { MARKSHEET_DESIGNS } from './marksheets'
 import { PrintMirror } from '../billing/ReceiptSheet'
 import { Badge, Button, EmptyState, Select, SkeletonRows } from '../../components/ui'
 import { IconClipboard, IconPrinter, IconX } from '../../components/icons'
@@ -17,16 +17,22 @@ import { IconClipboard, IconPrinter, IconX } from '../../components/icons'
  * print through #print-root — Ctrl/Cmd+P emits just the sheet.
  */
 export default function ResultsPage() {
+  const { account } = useAuth()
   const exams = useExams()
   const [examId, setExamId] = useState('')
   const [classId, setClassId] = useState('')
   const [studentId, setStudentId] = useState<string | null>(null)
+  // The school's house style opens by default; any design is one click away.
+  const [design, setDesign] = useState<PrintDesign>(
+    account?.school?.print_design ?? 'classic',
+  )
 
   const exam = (exams.data ?? []).find((e) => e.id === examId) ?? null
   const classes = useClasses(exam ? [exam.academic_year] : [])
   const result = useClassResult(examId || null, classId || null)
   const data = result.data
   const student = data?.students.find((s) => s.id === studentId) ?? null
+  const Marksheet = MARKSHEET_DESIGNS[design].Component
 
   return (
     <div>
@@ -93,19 +99,47 @@ export default function ResultsPage() {
         />
       ) : student ? (
         <>
-          <button
-            onClick={() => setStudentId(null)}
-            className="mb-3 inline-flex min-h-9 items-center gap-1.5 text-sm font-medium text-ink-muted hover:text-ink"
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setStudentId(null)}
+              className="inline-flex min-h-9 items-center gap-1.5 text-sm font-medium text-ink-muted hover:text-ink"
+            >
+              <IconX size={14} /> Back to class result
+            </button>
+            <div
+              role="radiogroup"
+              aria-label="Marksheet design"
+              className="ml-auto flex gap-1 rounded-lg bg-surface-sunken p-1"
+            >
+              {(Object.keys(MARKSHEET_DESIGNS) as PrintDesign[]).map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="radio"
+                  aria-checked={design === key}
+                  onClick={() => setDesign(key)}
+                  className={`h-8 rounded-md px-3 text-xs font-medium transition-colors ${
+                    design === key
+                      ? 'bg-surface text-ink shadow-sm'
+                      : 'text-ink-muted hover:text-ink'
+                  }`}
+                >
+                  {MARKSHEET_DESIGNS[key].label}
+                  {key === (account?.school?.print_design ?? 'classic') && (
+                    <span className="ml-1 text-ink-faint">·</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div
+            key={design}
+            className="mx-auto max-w-2xl animate-scale-in overflow-hidden rounded-xl border border-border bg-white shadow-sm"
           >
-            <IconX size={14} /> Back to class result
-          </button>
-          <div className="mx-auto max-w-2xl rounded-xl border border-border bg-surface p-6">
-            <Marksheet data={data} student={student} />
+            <Marksheet data={data} student={student} school={account?.school ?? null} />
           </div>
           <PrintMirror>
-            <PrintFrame>
-              <Marksheet data={data} student={student} />
-            </PrintFrame>
+            <Marksheet data={data} student={student} school={account?.school ?? null} />
           </PrintMirror>
         </>
       ) : (
@@ -221,100 +255,6 @@ function ClassResultTable({
           ))}
         </tbody>
       </table>
-    </div>
-  )
-}
-
-function Marksheet({ data, student }: { data: ClassResult; student: ClassResultStudent }) {
-  return (
-    <div>
-      <div className="mb-4 text-center">
-        <p className="text-base font-semibold">{data.exam.name} — Marksheet</p>
-        <p className="text-sm text-ink-muted">
-          {data.class_label} · {data.exam.academic_year_name}
-        </p>
-      </div>
-      <div className="mb-4 flex flex-wrap justify-between gap-2 text-sm">
-        <p>
-          <span className="text-ink-muted">Student:</span>{' '}
-          <span className="font-semibold">{student.name}</span>
-        </p>
-        <p>
-          <span className="text-ink-muted">Roll:</span>{' '}
-          <span className="font-semibold">{student.roll_no || '—'}</span>
-        </p>
-        {student.position_in_section != null && (
-          <p>
-            <span className="text-ink-muted">Rank:</span>{' '}
-            <span className="font-semibold">{student.position_in_section}</span>
-          </p>
-        )}
-      </div>
-      <table className="w-full text-sm">
-        <thead className="border-b-2 border-current text-xs uppercase tracking-wide">
-          <tr>
-            <th className="py-1.5 pr-2 text-left font-medium">Subject</th>
-            <th className="px-2 py-1.5 text-right font-medium">FM</th>
-            <th className="px-2 py-1.5 text-right font-medium">Theory</th>
-            <th className="px-2 py-1.5 text-right font-medium">Practical</th>
-            <th className="px-2 py-1.5 text-right font-medium">Total</th>
-            <th className="px-2 py-1.5 text-right font-medium">Grade</th>
-            <th className="py-1.5 pl-2 text-right font-medium">GP</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
-          {data.subjects.map((subject) => {
-            const mark = student.marks[subject.id]
-            return (
-              <tr key={subject.id}>
-                <td className="py-2 pr-2">{subject.name}</td>
-                <td className="px-2 py-2 text-right tabular-nums">{num(subject.full_marks)}</td>
-                <td className="px-2 py-2 text-right tabular-nums">
-                  {mark ? num(mark.theory) : '—'}
-                </td>
-                <td className="px-2 py-2 text-right tabular-nums">
-                  {mark ? num(mark.practical) : '—'}
-                </td>
-                <td className="px-2 py-2 text-right font-semibold tabular-nums">
-                  {mark ? (mark.absent ? 'Ab' : num(mark.total)) : '—'}
-                </td>
-                <td className="px-2 py-2 text-right">{mark?.letter || '—'}</td>
-                <td className="py-2 pl-2 text-right tabular-nums">
-                  {mark ? num(mark.grade_point) : '—'}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-        <tfoot className="border-t-2 border-current font-semibold">
-          <tr>
-            <td className="py-2 pr-2">Total</td>
-            <td className="px-2 py-2 text-right tabular-nums">{num(student.full_marks)}</td>
-            <td colSpan={2} />
-            <td className="px-2 py-2 text-right tabular-nums">{num(student.total)}</td>
-            <td className="px-2 py-2 text-right">{student.gpa_letter || '—'}</td>
-            <td className="py-2 pl-2 text-right tabular-nums">
-              {student.gpa ? num(student.gpa) : '—'}
-            </td>
-          </tr>
-        </tfoot>
-      </table>
-      <div className="mt-4 flex flex-wrap justify-between gap-2 text-sm">
-        <p>
-          <span className="text-ink-muted">Percentage:</span>{' '}
-          <span className="font-semibold">{num(student.percentage)}%</span>
-        </p>
-        <p>
-          <span className="text-ink-muted">GPA:</span>{' '}
-          <span className="font-semibold">
-            {student.gpa ? `${num(student.gpa)} (${student.gpa_letter})` : '—'}
-          </span>
-        </p>
-        <p>
-          <span className="text-ink-muted">Result:</span>{' '}
-          <span className="font-semibold">{student.all_passed ? 'Passed' : 'Failed'}</span>
-        </p>
-      </div>
     </div>
   )
 }

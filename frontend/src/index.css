@@ -42,6 +42,85 @@ body {
 }
 
 /*
+ * Motion language. One shared vocabulary so the whole product moves like a
+ * single organism: quick ease-out entrances (things arrive settled, never
+ * bouncy), soft lifts on hover, shimmer for loading. Durations stay under
+ * 300ms — motion should feel like responsiveness, not decoration.
+ */
+@theme {
+  --animate-fade-in: fade-in 0.18s ease-out both;
+  --animate-fade-up: fade-up 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-scale-in: scale-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-sheet-up: sheet-up 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-toast-in: toast-in 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.96) translateY(4px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  @keyframes sheet-up {
+    from { opacity: 0.4; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
+}
+
+/* Loading placeholders sweep instead of pulsing — calmer, more alive. */
+.skeleton-shimmer {
+  background: linear-gradient(
+    100deg,
+    var(--color-surface-sunken) 40%,
+    color-mix(in oklab, var(--color-surface-sunken), white 55%) 50%,
+    var(--color-surface-sunken) 60%
+  );
+  background-size: 200% 100%;
+  animation: var(--animate-shimmer);
+}
+
+/* Every page's content settles in as routes change. */
+.page-enter {
+  animation: var(--animate-fade-up);
+}
+
+/* Interactive cards lift a hair; buttons compress on press. */
+.lift {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.lift:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px -4px rgb(15 23 42 / 0.12);
+}
+.press:active {
+  transform: scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/*
  * Printing: receipts render into #print-root (a portal target); on paper the
  * app chrome disappears and only the receipt remains. On screen the portal
  * is invisible.

@@ -35,12 +35,15 @@ class AccountSerializer(serializers.ModelSerializer):
         school = resolve_school_for(account)
         if school is None:
             return None
+        branding = getattr(school, "branding", None)
         return {
             "id": str(school.id),
             "name": school.name,
             "address": school.address,
             "contact": school.contact,
             "pan_no": school.pan_no,
+            # House style for printed documents; CLASSIC when unset.
+            "print_design": branding.print_design if branding else "classic",
         }
 
     def get_permissions(self, account) -> list[str]:

@@ -299,10 +299,20 @@ function CertificateSheetModal({
   )
 }
 
-/** The certificate itself — legacy wording, snapshot data only. */
+/** The certificate itself — legacy wording, snapshot data only. The frame
+ *  follows the school's house style (branding.print_design): classic keeps
+ *  the double-rule title, formal adds the double border box, elegant strips
+ *  the ornament back to letter-spaced type. */
 function CertificateSheet({ cert, print = false }: { cert: Certificate; print?: boolean }) {
   const { account } = useAuth()
   const school = account?.school
+  const design = school?.print_design ?? 'classic'
+  const frame =
+    design === 'formal'
+      ? 'border-4 border-double border-black'
+      : design === 'elegant'
+        ? ''
+        : 'border border-black/60'
   const d = cert.data
   const line = (value: string | undefined, minWidth = '6rem') => (
     <span
@@ -314,14 +324,24 @@ function CertificateSheet({ cert, print = false }: { cert: Certificate; print?: 
   )
 
   return (
-    <div className={`${print ? 'p-10' : 'p-4 sm:p-8'} bg-white text-black`}>
+    <div className={`${print ? 'p-10' : 'p-4 sm:p-8'} ${frame} bg-white text-black`}>
       <header className="mb-2 text-center">
-        <h1 className="text-xl font-bold uppercase tracking-wide">{school?.name}</h1>
+        <h1
+          className={`font-bold uppercase ${
+            design === 'elegant' ? 'text-lg tracking-[0.3em]' : 'text-xl tracking-wide'
+          }`}
+        >
+          {school?.name}
+        </h1>
         {school?.address && <p className="text-sm">{school.address}</p>}
         {school?.contact && <p className="text-xs">Tel: {school.contact}</p>}
       </header>
       <div className="mb-6 mt-4 text-center">
-        <span className="inline-block border-b-2 border-double border-black px-6 pb-1 text-lg font-bold uppercase tracking-widest">
+        <span
+          className={`inline-block px-6 pb-1 text-lg font-bold uppercase tracking-widest ${
+            design === 'elegant' ? 'border-b border-black/40' : 'border-b-2 border-double border-black'
+          }`}
+        >
           Character Certificate
         </span>
       </div>

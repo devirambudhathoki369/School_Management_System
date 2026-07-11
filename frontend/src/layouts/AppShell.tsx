@@ -471,7 +471,11 @@ export default function AppShell() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-          <Outlet />
+          {/* key on the module root so content animates in per navigation,
+              but tab switches inside a workspace stay instant */}
+          <div key={location.pathname.split('/')[1]} className="page-enter">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

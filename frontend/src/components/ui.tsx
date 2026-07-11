@@ -46,7 +46,7 @@ export function Button({
   return (
     <button
       disabled={disabled || busy}
-      className={`inline-flex h-10 min-w-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON_STYLES[variant]} ${className}`}
+      className={`press inline-flex h-10 min-w-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold transition-[color,background-color,border-color,transform] outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON_STYLES[variant]} ${className}`}
       {...props}
     >
       {busy && <IconSpinner size={16} />}
@@ -178,7 +178,7 @@ export function StatCard({
   icon?: ReactNode
 }) {
   return (
-    <div className="rounded-xl border border-border bg-surface p-4 sm:p-5">
+    <div className="lift rounded-xl border border-border bg-surface p-4 sm:p-5">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[13px] font-medium text-ink-muted">{label}</p>
         {icon && <span className="text-ink-faint">{icon}</span>}
@@ -227,12 +227,12 @@ export function Modal({
     >
       <button
         aria-label="Close dialog"
-        className="absolute inset-0 bg-ink/40 backdrop-blur-[2px]"
+        className="absolute inset-0 animate-fade-in bg-ink/40 backdrop-blur-[2px]"
         onClick={onClose}
       />
       {/* Bottom sheet on phones, centered card from sm up */}
       <div
-        className={`relative flex max-h-[92dvh] w-full flex-col rounded-t-2xl bg-surface shadow-2xl sm:rounded-2xl ${
+        className={`relative flex max-h-[92dvh] w-full animate-sheet-up flex-col rounded-t-2xl bg-surface shadow-2xl sm:animate-scale-in sm:rounded-2xl ${
           wide ? 'sm:max-w-2xl' : 'sm:max-w-md'
         }`}
       >
@@ -286,7 +286,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`pointer-events-auto flex w-full max-w-sm items-start gap-2.5 rounded-xl border px-4 py-3 text-sm shadow-lg ${
+            className={`pointer-events-auto flex w-full max-w-sm animate-toast-in items-start gap-2.5 rounded-xl border px-4 py-3 text-sm shadow-lg ${
               t.tone === 'success'
                 ? 'border-positive/25 bg-positive-soft text-positive'
                 : 'border-danger/25 bg-danger-soft text-danger'
@@ -363,7 +363,7 @@ export function Credential({ label, value }: { label: string; value: string }) {
 }
 
 export function Skeleton({ className = '' }: { className?: string }) {
-  return <div className={`animate-pulse rounded-lg bg-surface-sunken ${className}`} />
+  return <div className={`skeleton-shimmer rounded-lg ${className}`} />
 }
 
 export function SkeletonRows({ rows = 5 }: { rows?: number }) {
@@ -388,9 +388,9 @@ export function EmptyState({
   action?: ReactNode
 }) {
   return (
-    <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
+    <div className="flex animate-fade-up flex-col items-center justify-center px-6 py-14 text-center">
       {icon && (
-        <div className="mb-3 flex size-12 items-center justify-center rounded-full bg-surface-sunken text-ink-faint">
+        <div className="mb-3 flex size-12 items-center justify-center rounded-full bg-surface-sunken text-ink-faint ring-4 ring-surface-sunken/40">
           {icon}
         </div>
       )}

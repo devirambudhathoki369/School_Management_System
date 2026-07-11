@@ -89,6 +89,17 @@ class SchoolSettings(BaseModel):
         return f"Settings: {self.school}"
 
 
+class PrintDesign(models.TextChoices):
+    """House style for printed academic documents (marksheets, certificates).
+    Chosen by the vendor at school onboarding; CLASSIC is the default when
+    nothing is picked. The frontend keeps one renderer per design."""
+
+    CLASSIC = "classic", "Classic (traditional bordered)"
+    ELEGANT = "elegant", "Elegant (minimal, airy)"
+    FORMAL = "formal", "Formal (national-exam grid)"
+    COMPACT = "compact", "Compact (dense, many prints)"
+
+
 class SchoolBranding(BaseModel):
     """Logos, signatures and public-facing copy used on documents and portals."""
 
@@ -99,6 +110,9 @@ class SchoolBranding(BaseModel):
     award_logo = models.ImageField(upload_to="branding/award/", null=True, blank=True)
     principal_sign = models.ImageField(upload_to="branding/sign/", null=True, blank=True)
     exam_coordinator_sign = models.ImageField(upload_to="branding/sign/", null=True, blank=True)
+    print_design = models.CharField(
+        max_length=12, choices=PrintDesign.choices, default=PrintDesign.CLASSIC
+    )
 
     class Meta(BaseModel.Meta):
         verbose_name_plural = "School branding"

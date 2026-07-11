@@ -18,12 +18,16 @@ import { api, setAccessToken } from './api'
 
 export type Role = 'super_admin' | 'admin' | 'staff' | 'student' | 'guardian'
 
+export type PrintDesign = 'classic' | 'elegant' | 'formal' | 'compact'
+
 export interface SchoolInfo {
   id: string
   name: string
   address: string
   contact: string
   pan_no: string
+  /** House style for printed documents (marksheets, certificates). */
+  print_design: PrintDesign
 }
 
 export interface Account {
