@@ -4,11 +4,11 @@ import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { bsMonthName, bsMonthShort, formatDateBS, formatMoney, formatReceiptNo } from '../lib/format'
-import { Badge, Money, Skeleton, StatCard } from '../components/ui'
+import { Money, Skeleton, StatCard } from '../components/ui'
 import {
   IconArrowRight,
+  IconGraduate,
   IconBilling,
-  IconCalendar,
   IconReceipt,
   IconStudents,
   IconWallet,
@@ -77,15 +77,16 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-2">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight">{data.school}</h2>
-          <p className="mt-0.5 text-sm text-ink-muted">Here is where the school stands today.</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-ink-faint">
+            Today at a glance
+          </p>
+          <h2 className="brand-text-gradient mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+            {data.school}
+          </h2>
+          <p className="mt-1 text-sm text-ink-muted">Here is where the school stands today.</p>
         </div>
-        <Badge tone="accent">
-          <IconCalendar size={13} className="mr-1.5" />
-          {formatDateBS(data.date_bs)}
-        </Badge>
       </div>
 
       {/* KPI row */}
@@ -105,17 +106,24 @@ export default function DashboardPage() {
               value={<Money value={data.finance.dues_outstanding} />}
               detail="charges minus receipts and discounts"
               icon={<IconWallet size={16} />}
+              tone="warning"
             />
             <StatCard
               label="Collected today"
               value={<Money value={data.finance.collected_today} />}
               detail={`${data.finance.receipts_today} receipt${data.finance.receipts_today === 1 ? '' : 's'} issued`}
               icon={<IconReceipt size={16} />}
+              tone="positive"
             />
           </>
         )}
         {data.staff && (
-          <StatCard label="Staff employed" value={data.staff.employed.toLocaleString('en-IN')} />
+          <StatCard
+            label="Staff employed"
+            value={data.staff.employed.toLocaleString('en-IN')}
+            icon={<IconGraduate size={16} />}
+            tone="neutral"
+          />
         )}
       </div>
 

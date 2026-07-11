@@ -305,28 +305,28 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const leafClass = ({ isActive }: { isActive: boolean }) =>
     `flex min-h-9 items-center rounded-md py-1.5 pl-3 pr-2 text-[13px] transition-colors ${
       isActive
-        ? 'bg-accent-soft font-medium text-accent-strong'
-        : 'text-ink-muted hover:bg-surface-sunken hover:text-ink'
+        ? 'bg-accent/15 font-medium text-accent'
+        : 'text-sidebar-muted hover:bg-white/5 hover:text-sidebar-ink'
     }`
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-5">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent font-bold text-white">
+      <div className="flex h-16 shrink-0 items-center gap-3 border-b border-sidebar-line px-5">
+        <div className="brand-gradient flex size-9 shrink-0 items-center justify-center rounded-xl font-bold text-white shadow-lg shadow-accent/30">
           {account?.school?.name?.[0] ?? 'S'}
         </div>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold leading-tight">
+          <p className="truncate text-sm font-semibold leading-tight text-sidebar-ink">
             {account?.school?.name ?? 'School ERP'}
           </p>
-          <p className="text-xs text-ink-muted">Platform console</p>
+          <p className="text-xs text-sidebar-faint">Platform console</p>
         </div>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-3">
         {sections.map((section) => (
           <div key={section.title} className="mb-4">
-            <p className="px-2 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+            <p className="px-2 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-faint">
               {section.title}
             </p>
             {section.groups.map((group) => {
@@ -339,8 +339,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                     className={({ isActive }) =>
                       `flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors ${
                         isActive
-                          ? 'bg-accent-soft text-accent-strong'
-                          : 'text-ink-muted hover:bg-surface-sunken hover:text-ink'
+                          ? 'bg-accent/15 text-accent'
+                          : 'text-sidebar-muted hover:bg-white/5 hover:text-sidebar-ink'
                       }`
                     }
                   >
@@ -358,8 +358,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                     aria-expanded={open}
                     className={`flex min-h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors ${
                       current
-                        ? 'text-ink'
-                        : 'text-ink-muted hover:bg-surface-sunken hover:text-ink'
+                        ? 'text-sidebar-ink'
+                        : 'text-sidebar-muted hover:bg-white/5 hover:text-sidebar-ink'
                     }`}
                   >
                     <group.icon size={17} aria-hidden />
@@ -367,11 +367,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                     <IconChevronDown
                       size={14}
                       aria-hidden
-                      className={`text-ink-faint transition-transform ${open ? '' : '-rotate-90'}`}
+                      className={`text-sidebar-faint transition-transform ${open ? '' : '-rotate-90'}`}
                     />
                   </button>
                   {open && (
-                    <div className="mb-1 ml-[21px] space-y-0.5 border-l border-border pl-2.5">
+                    <div className="mb-1 ml-[21px] space-y-0.5 border-l border-sidebar-line pl-2.5">
                       {group.children!.map((leaf) => (
                         <NavLink
                           key={leaf.to}
@@ -391,14 +391,14 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         ))}
       </nav>
 
-      <div className="shrink-0 border-t border-border p-3">
+      <div className="shrink-0 border-t border-sidebar-line p-3">
         <div className="flex items-center gap-3 rounded-lg px-2 py-1.5">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-sm font-semibold text-ink-muted">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-sidebar-raised text-sm font-semibold text-sidebar-ink">
             {account?.username?.[0]?.toUpperCase() ?? '?'}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium leading-tight">{account?.username}</p>
-            <p className="text-xs capitalize text-ink-muted">
+            <p className="truncate text-sm font-medium leading-tight text-sidebar-ink">{account?.username}</p>
+            <p className="text-xs capitalize text-sidebar-faint">
               {account?.role.replace('_', ' ')}
             </p>
           </div>
@@ -406,7 +406,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             onClick={() => setChangingPassword(true)}
             aria-label="Change password"
             title="Change password"
-            className="flex size-9 items-center justify-center rounded-lg text-ink-faint hover:bg-surface-sunken hover:text-ink"
+            className="flex size-9 items-center justify-center rounded-lg text-sidebar-faint hover:bg-white/5 hover:text-sidebar-ink"
           >
             <IconKey size={16} />
           </button>
@@ -414,7 +414,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             onClick={onLogout}
             aria-label="Sign out"
             title="Sign out"
-            className="flex size-9 items-center justify-center rounded-lg text-ink-faint hover:bg-surface-sunken hover:text-ink"
+            className="flex size-9 items-center justify-center rounded-lg text-sidebar-faint hover:bg-white/5 hover:text-sidebar-ink"
           >
             <IconLogout size={16} />
           </button>
@@ -436,7 +436,7 @@ export default function AppShell() {
 
   return (
     <div className="flex h-full">
-      <aside className="hidden w-[17rem] shrink-0 border-r border-border bg-surface lg:block">
+      <aside className="hidden w-[17rem] shrink-0 bg-sidebar lg:block">
         <SidebarContent />
       </aside>
 
@@ -447,7 +447,7 @@ export default function AppShell() {
             className="absolute inset-0 bg-ink/40"
             onClick={() => setDrawerOpen(false)}
           />
-          <aside className="absolute inset-y-0 left-0 w-[19rem] max-w-[88vw] bg-surface shadow-xl">
+          <aside className="absolute inset-y-0 left-0 w-[19rem] max-w-[88vw] bg-sidebar shadow-xl">
             <SidebarContent onNavigate={() => setDrawerOpen(false)} />
           </aside>
         </div>

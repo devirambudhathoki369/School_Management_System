@@ -166,22 +166,40 @@ export function Money({
 
 // ---------------------------------------------------------------- StatCard
 
+type StatTone = 'accent' | 'positive' | 'warning' | 'danger' | 'neutral'
+
+const STAT_CHIP: Record<StatTone, string> = {
+  accent: 'bg-accent-soft text-accent-strong',
+  positive: 'bg-positive-soft text-positive',
+  warning: 'bg-warning-soft text-warning',
+  danger: 'bg-danger-soft text-danger',
+  neutral: 'bg-surface-sunken text-ink-muted',
+}
+
 export function StatCard({
   label,
   value,
   detail,
   icon,
+  tone = 'accent',
 }: {
   label: string
   value: ReactNode
   detail?: ReactNode
   icon?: ReactNode
+  tone?: StatTone
 }) {
   return (
     <div className="lift rounded-xl border border-border bg-surface p-4 sm:p-5">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[13px] font-medium text-ink-muted">{label}</p>
-        {icon && <span className="text-ink-faint">{icon}</span>}
+        {icon && (
+          <span
+            className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${STAT_CHIP[tone]}`}
+          >
+            {icon}
+          </span>
+        )}
       </div>
       <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums">{value}</p>
       {detail && <p className="mt-1 text-xs text-ink-faint">{detail}</p>}
