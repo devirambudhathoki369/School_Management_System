@@ -305,8 +305,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const leafClass = ({ isActive }: { isActive: boolean }) =>
     `flex min-h-9 items-center rounded-md py-1.5 pl-3 pr-2 text-[13px] transition-colors ${
       isActive
-        ? 'bg-accent/15 font-medium text-accent'
-        : 'text-sidebar-muted hover:bg-white/5 hover:text-sidebar-ink'
+        ? 'bg-accent-soft font-medium text-accent-strong'
+        : 'text-sidebar-muted hover:bg-sidebar-hover hover:text-sidebar-ink'
     }`
 
   return (
@@ -339,8 +339,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                     className={({ isActive }) =>
                       `flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors ${
                         isActive
-                          ? 'bg-accent/15 text-accent'
-                          : 'text-sidebar-muted hover:bg-white/5 hover:text-sidebar-ink'
+                          ? 'bg-accent-soft text-accent-strong'
+                          : 'text-sidebar-muted hover:bg-sidebar-hover hover:text-sidebar-ink'
                       }`
                     }
                   >
@@ -359,7 +359,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                     className={`flex min-h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors ${
                       current
                         ? 'text-sidebar-ink'
-                        : 'text-sidebar-muted hover:bg-white/5 hover:text-sidebar-ink'
+                        : 'text-sidebar-muted hover:bg-sidebar-hover hover:text-sidebar-ink'
                     }`}
                   >
                     <group.icon size={17} aria-hidden />
@@ -406,7 +406,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             onClick={() => setChangingPassword(true)}
             aria-label="Change password"
             title="Change password"
-            className="flex size-9 items-center justify-center rounded-lg text-sidebar-faint hover:bg-white/5 hover:text-sidebar-ink"
+            className="flex size-9 items-center justify-center rounded-lg text-sidebar-faint hover:bg-sidebar-hover hover:text-sidebar-ink"
           >
             <IconKey size={16} />
           </button>
@@ -414,7 +414,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             onClick={onLogout}
             aria-label="Sign out"
             title="Sign out"
-            className="flex size-9 items-center justify-center rounded-lg text-sidebar-faint hover:bg-white/5 hover:text-sidebar-ink"
+            className="flex size-9 items-center justify-center rounded-lg text-sidebar-faint hover:bg-sidebar-hover hover:text-sidebar-ink"
           >
             <IconLogout size={16} />
           </button>
@@ -436,7 +436,7 @@ export default function AppShell() {
 
   return (
     <div className="flex h-full">
-      <aside className="hidden w-[17rem] shrink-0 bg-sidebar lg:block">
+      <aside className="hidden w-[17rem] shrink-0 border-r border-sidebar-line bg-sidebar lg:block">
         <SidebarContent />
       </aside>
 

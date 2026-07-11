@@ -30,14 +30,16 @@
   --color-danger: #dc2626;
   --color-danger-soft: #fef2f2;
 
-  /* Sidebar: deep blue-slate so the workspace content reads as the bright
-     focal plane; text tones are tuned for that background. */
-  --color-sidebar: #0c1424;
-  --color-sidebar-raised: #17223a;
-  --color-sidebar-line: #24314d;
-  --color-sidebar-ink: #e7edf6;
-  --color-sidebar-muted: #93a3bc;
-  --color-sidebar-faint: #5d7093;
+  /* Sidebar: its own near-white cool surface — a shade apart from both the
+     page background and the white cards, so the navigation reads as a
+     distinct rail without going dark (product owner's call). */
+  --color-sidebar: #fbfcfe;
+  --color-sidebar-raised: #eef2f7;
+  --color-sidebar-hover: #eef2f7;
+  --color-sidebar-line: #e4eaf2;
+  --color-sidebar-ink: #0f172a;
+  --color-sidebar-muted: #5b6b81;
+  --color-sidebar-faint: #94a3b8;
 }
 
 /* Brand identity gradient — logos, avatars, hero accents. */
