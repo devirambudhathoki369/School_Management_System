@@ -23,6 +23,11 @@ api.interceptors.request.use((config) => {
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`
   }
+  // FormData must negotiate its own multipart boundary — the JSON default
+  // would make Django reject the upload as unsupported_media_type.
+  if (config.data instanceof FormData) {
+    config.headers['Content-Type'] = undefined
+  }
   return config
 })
 

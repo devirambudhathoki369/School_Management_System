@@ -26,9 +26,23 @@ class Homework(TenantScopedModel):
         return self.title
 
 
+def homework_file_path(instance, filename):
+    from apps.core.uploads import stored_name
+
+    return stored_name(instance.homework.school_id, "homework", filename.rsplit(".", 1)[-1])
+
+
+def submission_file_path(instance, filename):
+    from apps.core.uploads import stored_name
+
+    return stored_name(instance.submission.school_id, "homework", filename.rsplit(".", 1)[-1])
+
+
 class HomeworkAttachment(BaseModel):
     homework = models.ForeignKey(Homework, on_delete=models.CASCADE, related_name="attachments")
-    file = models.FileField(upload_to="homework/%Y/%m/")
+    # New uploads land in the per-school layout; imported rows keep
+    # their legacy paths (upload_to only affects fresh saves).
+    file = models.FileField(upload_to=homework_file_path)
     legacy_id = models.BigIntegerField(null=True, blank=True, unique=True)
 
     def __str__(self):
@@ -59,7 +73,7 @@ class SubmissionAttachment(BaseModel):
     submission = models.ForeignKey(
         Submission, on_delete=models.CASCADE, related_name="attachments"
     )
-    file = models.FileField(upload_to="homework_submissions/%Y/%m/")
+    file = models.FileField(upload_to=submission_file_path)
 
     def __str__(self):
         return self.file.name

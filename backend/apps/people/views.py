@@ -5,6 +5,7 @@ from rest_framework import serializers
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.generics import ListAPIView
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -23,6 +24,33 @@ from .serializers import (
 )
 
 MANAGERS = (Role.ADMIN, Role.STAFF)
+
+
+def _swap_photo(request, person):
+    """POST replaces the photo (validated intake), DELETE removes it.
+    The old file is deleted from storage — person photos are current-state,
+    not history."""
+    from apps.core import uploads
+
+    if request.method == "DELETE":
+        if person.photo:
+            person.photo.delete(save=False)
+            person.photo = None
+            person.save(update_fields=["photo", "updated_at"])
+        return Response(status=204)
+    upload = request.FILES.get("photo")
+    if upload is None:
+        raise ValidationError({"photo": "Attach an image."})
+    ext = uploads.validate(upload, "photo")
+    if person.photo:
+        person.photo.delete(save=False)
+    # the upload_to callable derives the real stored name; the original
+    # filename only contributes its (sniffed) extension
+    upload.name = f"photo.{ext}"
+    person.photo = upload
+    person.save(update_fields=["photo", "updated_at"])
+    return Response({"photo": person.photo.url}, status=200)
+
 
 
 class PromoteSerializer(serializers.Serializer):
@@ -211,6 +239,17 @@ class StudentViewSet(TenantScopedViewSet):
         return Response(StudentGuardianSerializer(link).data)
 
 
+    @extend_schema(summary="Upload or remove this student's photo")
+    @action(
+        detail=True,
+        methods=["post", "delete"],
+        url_path="photo",
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def photo(self, request, pk=None):
+        return _swap_photo(request, self.get_object())
+
+
 class GuardianViewSet(TenantScopedViewSet):
     queryset = Guardian.objects.select_related("account")
     serializer_class = GuardianSerializer
@@ -342,6 +381,17 @@ class StaffViewSet(TenantScopedViewSet):
             },
             status=201 if created else 200,
         )
+
+
+    @extend_schema(summary="Upload or remove this staff member's photo")
+    @action(
+        detail=True,
+        methods=["post", "delete"],
+        url_path="photo",
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def photo(self, request, pk=None):
+        return _swap_photo(request, self.get_object())
 
 
 class StaffRoleListView(ListAPIView):

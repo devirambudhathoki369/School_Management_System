@@ -50,7 +50,7 @@ export default function YearsPage() {
         b.start_date_bs.localeCompare(a.start_date_bs),
       ),
     [years.data],
-  )
+  ) 
 
   return (
     <div className="space-y-5">

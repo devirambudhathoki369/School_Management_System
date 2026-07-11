@@ -77,10 +77,18 @@ class HomeworkViewSet(TenantScopedViewSet):
         parser_classes=[MultiPartParser, FormParser],
     )
     def add_attachment(self, request, pk=None):
+        from apps.core import uploads
+
         homework = self.get_object()
         upload = request.FILES.get("file")
         if upload is None:
             raise ValidationError({"file": "Attach a file."})
+        # Content-sniffed intake: the stored extension is what the bytes
+        # earned, not whatever the browser claimed.
+        ext = uploads.validate(upload, "document")
+        # the upload_to callable builds the real per-school path; the name
+        # here only carries the sniffed extension
+        upload.name = f"file.{ext}"
         attachment = HomeworkAttachment.objects.create(homework=homework, file=upload)
         return Response(HomeworkAttachmentSerializer(attachment).data, status=201)
 

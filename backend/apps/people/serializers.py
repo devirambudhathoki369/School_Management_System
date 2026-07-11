@@ -37,8 +37,9 @@ class StudentListSerializer(serializers.ModelSerializer):
         model = Student
         fields = [
             "id", "full_name", "gender", "status", "roll_no",
-            "class_info", "class_label", "contact",
+            "class_info", "class_label", "contact", "photo",
         ]
+        read_only_fields = ["photo"]  # written only via the photo action
 
 
 class StudentDetailSerializer(serializers.ModelSerializer):
@@ -53,9 +54,10 @@ class StudentDetailSerializer(serializers.ModelSerializer):
             "email", "contact", "address", "status", "class_info", "academic_year",
             "class_label", "academic_year_name",
             "roll_no", "symbol_no", "regd_no", "emis", "rfid_card",
-            "previous_school", "remarks", "ethnicity", "blood_group", "guardians",
+            "previous_school", "remarks", "ethnicity", "blood_group", "photo",
+            "guardians",
         ]
-        read_only_fields = ["id"]
+        read_only_fields = ["id", "photo"]  # written only via the photo action
 
     def validate(self, attrs):
         request = self.context["request"]
@@ -102,6 +104,7 @@ class StaffSerializer(serializers.ModelSerializer):
             "role_name", "status", "gender", "birth_date_bs", "email",
             "primary_contact", "secondary_contact", "address", "qualification",
             "joined_date_bs", "rfid_card", "primary_subject", "secondary_subject",
-            "permissions", "account_username", "account_active", "account_last_login",
+            "photo", "permissions",
+            "account_username", "account_active", "account_last_login",
         ]
-        read_only_fields = ["id"]
+        read_only_fields = ["id", "photo"]  # written only via the photo action

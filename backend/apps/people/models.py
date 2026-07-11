@@ -35,6 +35,18 @@ class Guardian(TenantScopedModel):
         return self.name
 
 
+def student_photo_path(instance, filename):  # noqa: ARG001 — name is discarded by design
+    from apps.core.uploads import stored_name
+
+    return stored_name(instance.school_id, "student-photos", filename.rsplit(".", 1)[-1])
+
+
+def staff_photo_path(instance, filename):  # noqa: ARG001
+    from apps.core.uploads import stored_name
+
+    return stored_name(instance.school_id, "staff-photos", filename.rsplit(".", 1)[-1])
+
+
 class Student(TenantScopedModel):
     class Status(models.TextChoices):
         RUNNING = "running", "Running"
@@ -68,6 +80,9 @@ class Student(TenantScopedModel):
     # Merged legacy StudentOtherInfo satellite
     ethnicity = models.CharField(max_length=30, blank=True, default="")
     blood_group = models.CharField(max_length=5, blank=True, default="")
+
+    # Uploaded through the validated intake only (apps.core.uploads).
+    photo = models.ImageField(upload_to=student_photo_path, null=True, blank=True)
 
     account = models.OneToOneField(
         "identity.Account", null=True, blank=True, on_delete=models.SET_NULL,
@@ -152,6 +167,9 @@ class Staff(TenantScopedModel):
     secondary_subject = models.ForeignKey(
         Subject, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
     )
+
+    # Uploaded through the validated intake only (apps.core.uploads).
+    photo = models.ImageField(upload_to=staff_photo_path, null=True, blank=True)
 
     # Module permission codes checked server-side (successor of the legacy
     # UI-only permissions JSON). Evolves into full RBAC tables.

@@ -12,6 +12,7 @@ import {
 } from '../../lib/people'
 import { formatDateBS } from '../../lib/format'
 import StudentModal from './StudentModal'
+import FileUpload from '../../components/FileUpload'
 import {
   Badge,
   Button,
@@ -85,12 +86,15 @@ export default function StudentProfilePage() {
 
       <div className="rounded-xl border border-border bg-surface p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-semibold tracking-tight">{fullName}</h2>
-            <p className="mt-1 text-sm text-ink-muted">
-              {s.class_label} · {s.academic_year_name}
-              {s.roll_no ? ` · Roll ${s.roll_no}` : ''}
-            </p>
+          <div className="flex items-center gap-4">
+            <PhotoBadge student={s} />
+            <div>
+              <h2 className="text-xl font-semibold tracking-tight">{fullName}</h2>
+              <p className="mt-1 text-sm text-ink-muted">
+                {s.class_label} · {s.academic_year_name}
+                {s.roll_no ? ` · Roll ${s.roll_no}` : ''}
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Badge tone={STATUS_TONE[s.status] ?? 'neutral'}>
@@ -555,5 +559,91 @@ function GuardianLinkModal({
         </div>
       </div>
     </Modal>
+  )
+}
+
+
+/** Photo avatar with the upload/replace/remove flow behind a tap. */
+function PhotoBadge({ student }: { student: { id: string; first_name: string; photo?: string | null } }) {
+  const toast = useToast()
+  const queryClient = useQueryClient()
+  const [open, setOpen] = useState(false)
+
+  const refresh = () =>
+    queryClient.invalidateQueries({ queryKey: ['people', 'student-full', student.id] })
+
+  const upload = useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData()
+      form.append('photo', file)
+      return api.post(`/api/v1/people/students/${student.id}/photo/`, form)
+    },
+    onSuccess: () => {
+      refresh()
+      toast.success('Photo updated.')
+      setOpen(false)
+    },
+    onError: (error) => toast.error(apiErrorMessage(error)),
+  })
+
+  const remove = useMutation({
+    mutationFn: () => api.delete(`/api/v1/people/students/${student.id}/photo/`),
+    onSuccess: () => {
+      refresh()
+      toast.success('Photo removed.')
+      setOpen(false)
+    },
+    onError: (error) => toast.error(apiErrorMessage(error)),
+  })
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        aria-label="Change photo"
+        title="Change photo"
+        className="group relative size-16 shrink-0 overflow-hidden rounded-xl border border-border bg-surface-sunken"
+      >
+        {student.photo ? (
+          <img src={student.photo} alt="" className="size-full object-cover" />
+        ) : (
+          <span className="flex size-full items-center justify-center text-xl font-semibold text-ink-faint">
+            {student.first_name?.[0]?.toUpperCase() ?? '?'}
+          </span>
+        )}
+        <span className="absolute inset-x-0 bottom-0 bg-ink/60 py-0.5 text-center text-[10px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
+          Edit
+        </span>
+      </button>
+      <Modal open={open} onClose={() => setOpen(false)} title="Student photo">
+        <div className="space-y-3">
+          {student.photo && (
+            <img
+              src={student.photo}
+              alt=""
+              className="mx-auto max-h-56 rounded-xl border border-border object-contain"
+            />
+          )}
+          <FileUpload
+            accept="image/*"
+            capture
+            busy={upload.isPending}
+            onFile={(file) => upload.mutate(file)}
+            label={student.photo ? 'Drop a new photo, or tap to browse' : 'Drop a photo here, or tap to browse'}
+            hint="JPG, PNG or WebP · up to 5 MB · the camera works on phones"
+          />
+          {student.photo && (
+            <Button
+              variant="danger"
+              className="w-full"
+              busy={remove.isPending}
+              onClick={() => remove.mutate()}
+            >
+              Remove photo
+            </Button>
+          )}
+        </div>
+      </Modal>
+    </>
   )
 }

@@ -13,6 +13,7 @@ export default defineConfig({
     proxy: {
       '/api': apiProxy,
       '/health': apiProxy,
+      '/media': apiProxy,
     },
   },
 })
