@@ -1,5 +1,5 @@
 from django.urls import path
-from rest_framework.routers import DefaultRouter
+from apps.core.routers import ApiRouter
 
 from .views import (
     BillingYearListView,
@@ -11,7 +11,7 @@ from .views import (
     StandingDiscountViewSet,
 )
 
-router = DefaultRouter()
+router = ApiRouter()
 router.register("fee-titles", FeeTitleViewSet, basename="fee-title")
 router.register("fees", FeeScheduleViewSet, basename="fee")
 router.register("discounts", StandingDiscountViewSet, basename="discount")

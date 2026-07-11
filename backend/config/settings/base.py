@@ -254,6 +254,10 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
 
+# Django admin mount point — override in production so credential scanners
+# don't find a login form at /admin/.
+ADMIN_PATH = env("DJANGO_ADMIN_PATH", default="admin/")
+
 # Optional shared secret ZKTeco devices append as ?pushcommkey= on /iclock/*.
 DEVICE_PUSH_COMM_KEY = env("DEVICE_PUSH_COMM_KEY", default="")
 

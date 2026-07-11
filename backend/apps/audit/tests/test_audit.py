@@ -44,7 +44,10 @@ class TestReadEndpoint:
         login(api, "admin_audit", "admin")
         res = api.get("/api/v1/audit/events/")
         assert res.status_code == 200
-        assert [row["object_id"] for row in res.data["results"]] == ["x-1"]
+        # login itself audits now, so assert isolation, not exact contents
+        ids = [row["object_id"] for row in res.data["results"]]
+        assert "x-1" in ids
+        assert "y" not in ids
 
     def test_staff_cannot_read_the_log(self, audit_setup):
         school, event = audit_setup

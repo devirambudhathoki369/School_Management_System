@@ -1,4 +1,4 @@
-from rest_framework.routers import DefaultRouter
+from apps.core.routers import ApiRouter
 
 from .views import (
     CalendarEventViewSet,
@@ -8,7 +8,7 @@ from .views import (
     NoticeViewSet,
 )
 
-router = DefaultRouter()
+router = ApiRouter()
 router.register("notices", NoticeViewSet, basename="notice")
 router.register("news", NewsPostViewSet, basename="news-post")
 router.register("calendar", CalendarEventViewSet, basename="calendar-event")

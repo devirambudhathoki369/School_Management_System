@@ -1,5 +1,5 @@
 from django.urls import path
-from rest_framework.routers import DefaultRouter
+from apps.core.routers import ApiRouter
 
 from .views import (
     ClassAttendanceSessionViewSet,
@@ -7,7 +7,7 @@ from .views import (
     StaffAttendanceRecordViewSet,
 )
 
-router = DefaultRouter()
+router = ApiRouter()
 router.register("sessions", ClassAttendanceSessionViewSet, basename="attendance-session")
 router.register("staff", StaffAttendanceRecordViewSet, basename="staff-attendance")
 

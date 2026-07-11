@@ -71,6 +71,9 @@ export interface StaffMember {
   primary_subject: string | null
   secondary_subject: string | null
   permissions: string[]
+  account_username: string | null
+  account_active: boolean | null
+  account_last_login: string | null
 }
 
 export interface StaffRoleRow {

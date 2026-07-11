@@ -12,6 +12,7 @@ import {
 import {
   Badge,
   Button,
+  Credential,
   EmptyState,
   Field,
   Input,
@@ -23,6 +24,7 @@ import {
   useToast,
 } from '../../components/ui'
 import {
+  IconKey,
   IconPencil,
   IconSearch,
   IconShield,
@@ -47,6 +49,7 @@ export default function StaffPage() {
   const [page, setPage] = useState(1)
   const [editing, setEditing] = useState<StaffMember | 'new' | null>(null)
   const [granting, setGranting] = useState<StaffMember | null>(null)
+  const [keying, setKeying] = useState<StaffMember | null>(null)
 
   const { data, isLoading, isError } = useStaffList({ search: query, status, page })
   const rows = data?.results ?? []
@@ -128,6 +131,30 @@ export default function StaffPage() {
                   </Badge>
                 </span>
                 <button
+                  aria-label={`Login access for ${m.full_name}`}
+                  title={
+                    m.account_username
+                      ? `Login: ${m.account_username}${m.account_active ? '' : ' (disabled)'}`
+                      : 'No login yet'
+                  }
+                  onClick={() => setKeying(m)}
+                  className={`relative flex size-9 items-center justify-center rounded-lg ${
+                    m.account_active
+                      ? 'text-accent-strong hover:bg-accent-soft'
+                      : m.account_username
+                        ? 'text-warning hover:bg-surface-sunken'
+                        : 'text-ink-faint hover:bg-surface-sunken hover:text-ink'
+                  }`}
+                >
+                  <IconKey size={16} />
+                  {m.account_active && (
+                    <span
+                      aria-hidden
+                      className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-positive"
+                    />
+                  )}
+                </button>
+                <button
                   aria-label={`Permissions for ${m.full_name}`}
                   title={`${grants.length} grants`}
                   onClick={() => setGranting(m)}
@@ -171,7 +198,133 @@ export default function StaffPage() {
         />
       )}
       {granting && <PermissionsModal member={granting} onClose={() => setGranting(null)} />}
+      {keying && <LoginAccessModal member={keying} onClose={() => setKeying(null)} />}
     </div>
+  )
+}
+
+/** Relative "last seen" for the access panel. */
+function since(iso: string | null): string {
+  if (!iso) return 'never signed in'
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
+  if (days <= 0) return 'today'
+  if (days === 1) return 'yesterday'
+  if (days < 30) return `${days} days ago`
+  const months = Math.floor(days / 30)
+  return months === 1 ? 'a month ago' : `${months} months ago`
+}
+
+/**
+ * Console login lifecycle for one staff member: provision, reset, disable.
+ * Temp credentials appear exactly once — the server never stores them in
+ * the clear — so the reveal panel is the entire hand-over ceremony.
+ */
+function LoginAccessModal({ member, onClose }: { member: StaffMember; onClose: () => void }) {
+  const toast = useToast()
+  const queryClient = useQueryClient()
+  const [issued, setIssued] = useState<{ username: string; temp_password: string } | null>(null)
+
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['people', 'staff'] })
+
+  const provision = useMutation({
+    mutationFn: async () =>
+      (
+        await api.post<{ username: string; temp_password: string }>(
+          `/api/v1/people/staff/${member.id}/login-access/`,
+        )
+      ).data,
+    onSuccess: (data) => {
+      setIssued(data)
+      refresh()
+    },
+    onError: (error) => toast.error(apiErrorMessage(error)),
+  })
+
+  const revoke = useMutation({
+    mutationFn: () => api.delete(`/api/v1/people/staff/${member.id}/login-access/`),
+    onSuccess: () => {
+      refresh()
+      toast.success('Login disabled; every session is signed out.')
+      onClose()
+    },
+    onError: (error) => toast.error(apiErrorMessage(error)),
+  })
+
+  const hasLogin = Boolean(member.account_username)
+  const active = Boolean(member.account_active)
+
+  return (
+    <Modal open onClose={onClose} title={`Login access — ${member.full_name}`}>
+      {issued ? (
+        <div className="space-y-4">
+          <p className="text-sm text-ink-muted">
+            Hand these to {member.first_name} — the temporary password is shown{' '}
+            <span className="font-semibold text-ink">only this once</span>. They must set
+            their own password at first sign-in, and every previous session has been
+            signed out.
+          </p>
+          <Credential label="Username" value={issued.username} />
+          <Credential label="Temporary password" value={issued.temp_password} />
+          <Button className="w-full" onClick={onClose}>
+            Done
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {hasLogin ? (
+            <div className="flex items-center justify-between rounded-lg bg-surface-sunken px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">
+                  Console login
+                </p>
+                <p className="truncate font-mono text-sm">{member.account_username}</p>
+                <p className="mt-0.5 text-xs text-ink-muted">
+                  Last sign-in: {since(member.account_last_login)}
+                </p>
+              </div>
+              <Badge tone={active ? 'positive' : 'warning'}>
+                {active ? 'active' : 'disabled'}
+              </Badge>
+            </div>
+          ) : (
+            <p className="text-sm text-ink-muted">
+              {member.full_name} has no console login yet. Creating one issues a username
+              and a temporary password to hand over in person. What they can see and change
+              is controlled separately by their module permissions.
+            </p>
+          )}
+          <div className="flex flex-col gap-2">
+            <Button busy={provision.isPending} onClick={() => provision.mutate()}>
+              <IconKey size={16} />
+              {hasLogin
+                ? active
+                  ? 'Reset password'
+                  : 'Re-enable & issue new password'
+                : 'Create login'}
+            </Button>
+            {hasLogin && active && (
+              <Button
+                variant="danger"
+                busy={revoke.isPending}
+                onClick={() => {
+                  if (window.confirm(`Disable ${member.full_name}'s login and end their sessions?`)) {
+                    revoke.mutate()
+                  }
+                }}
+              >
+                Disable login
+              </Button>
+            )}
+          </div>
+          {hasLogin && (
+            <p className="text-xs text-ink-faint">
+              Resetting or disabling takes effect immediately — refresh tokens are
+              blacklisted, so open sessions die at their next request.
+            </p>
+          )}
+        </div>
+      )}
+    </Modal>
   )
 }
 

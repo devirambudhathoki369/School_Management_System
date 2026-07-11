@@ -8,16 +8,27 @@ from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenRefreshView
 
+from apps.audit.models import AuditEvent
+from apps.audit.services import record as audit
 from apps.core.permissions import PERMISSION_MODULES
+from apps.tenants.services import resolve_school_for
 
-from .serializers import AccountSerializer, ChangePasswordSerializer, LoginSerializer
+from . import lockout
+from .serializers import (
+    AccountSerializer,
+    ChangePasswordSerializer,
+    HardenedTokenRefreshSerializer,
+    LoginSerializer,
+)
 
 
 class LoginThrottle(AnonRateThrottle):
     """Cap on credential attempts (login abuse — DOCUMENTATION.md §17.2).
     Per-IP: generous enough for a school NAT (many families share one
-    public IP) while still stopping brute force."""
+    public IP) while still stopping brute force. Distributed guessing is
+    handled separately by the per-account lockout (identity.lockout)."""
 
     scope = "login"
     rate = "30/min"
@@ -47,9 +58,65 @@ class LoginView(GenericAPIView):
         ),
     )
     def post(self, request):
+        # Failure paths RETURN responses instead of raising: DRF's exception
+        # handler marks the transaction rollback-only, which would erase the
+        # audit rows written below (see apps.audit.services).
+        data = request.data if isinstance(request.data, dict) else {}
+        role = str(data.get("role", ""))
+        username = str(data.get("username", ""))
+        if username:
+            wait = lockout.seconds_remaining(role, username)
+            if wait:
+                return Response(
+                    {"detail": f"Too many failed attempts. Try again in {-(-wait // 60)} minutes."},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
         serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            if username and lockout.register_failure(role, username):
+                audit(
+                    action=AuditEvent.Action.LOGIN,
+                    object_table="identity.Account",
+                    object_id=f"{role}:{username}"[:40],
+                    changes={"event": "lockout", "failures": lockout.LOCKOUT_THRESHOLD},
+                    request=request,
+                )
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        account = serializer.validated_data["account"]
+        lockout.reset(role, username)
+        audit(
+            action=AuditEvent.Action.LOGIN,
+            object_table="identity.Account",
+            object_id=account.id,
+            actor=account,
+            school=resolve_school_for(account),
+            changes={"event": "success", "role": account.role},
+            request=request,
+        )
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class HardenedTokenRefreshView(TokenRefreshView):
+    """Refresh that re-checks the ACCOUNT, not just the token signature —
+    a deactivated principal must lose access at the next refresh, not when
+    the 7-day token finally expires."""
+
+    serializer_class = HardenedTokenRefreshSerializer
+    throttle_classes = [RefreshThrottle]
+
+    def post(self, request, *args, **kwargs):
+        from rest_framework.exceptions import AuthenticationFailed
+
+        # The serializer blacklists the token when its account is dead. That
+        # write must COMMIT, so the 401 is returned rather than raised —
+        # DRF's handler would mark the transaction rollback-only and undo
+        # the blacklisting (see apps.audit.services for the same trap).
+        try:
+            return super().post(request, *args, **kwargs)
+        except AuthenticationFailed as exc:
+            if exc.get_codes() == "account_inactive":
+                return Response({"detail": str(exc.detail)}, status=status.HTTP_401_UNAUTHORIZED)
+            raise
 
 
 class ChangePasswordThrottle(UserRateThrottle):
@@ -80,6 +147,15 @@ class ChangePasswordView(GenericAPIView):
             account.save(update_fields=["password", "password_change_required", "updated_at"])
             for token in OutstandingToken.objects.filter(user=account):
                 BlacklistedToken.objects.get_or_create(token=token)
+            audit(
+                action=AuditEvent.Action.UPDATE,
+                object_table="identity.Account",
+                object_id=account.id,
+                actor=account,
+                school=resolve_school_for(account),
+                changes={"event": "password_change", "sessions_revoked": True},
+                request=request,
+            )
         refresh = RefreshToken.for_user(account)
         refresh["role"] = account.role
         return Response(

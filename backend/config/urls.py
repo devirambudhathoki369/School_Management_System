@@ -10,7 +10,10 @@ from apps.core.reports import DashboardView
 from apps.core.views import CalendarView
 
 urlpatterns = [
-    path("admin/", admin.site.urls),
+    # Movable in production (DJANGO_ADMIN_PATH=<segment>/): the Django admin
+    # login has no lockout of its own, so don't leave it at the default
+    # address every scanner tries first.
+    path(getattr(settings, "ADMIN_PATH", "admin/"), admin.site.urls),
     path("health/", include("apps.core.urls")),
     path("api/v1/meta/calendar/", CalendarView.as_view(), name="meta-calendar"),
     path("api/v1/reports/dashboard/", DashboardView.as_view(), name="reports-dashboard"),

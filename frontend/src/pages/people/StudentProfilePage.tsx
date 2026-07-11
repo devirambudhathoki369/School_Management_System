@@ -15,6 +15,7 @@ import StudentModal from './StudentModal'
 import {
   Badge,
   Button,
+  Credential,
   EmptyState,
   Field,
   Input,
@@ -26,7 +27,6 @@ import {
 } from '../../components/ui'
 import {
   IconChevronLeft,
-  IconCopy,
   IconKey,
   IconPencil,
   IconPlus,
@@ -368,28 +368,6 @@ function PortalAccessButton({
         </Modal>
       )}
     </>
-  )
-}
-
-function Credential({ label, value }: { label: string; value: string }) {
-  const toast = useToast()
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-sunken px-4 py-3">
-      <div className="min-w-0">
-        <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">{label}</p>
-        <p className="truncate font-mono text-base font-semibold tracking-wide">{value}</p>
-      </div>
-      <button
-        aria-label={`Copy ${label.toLowerCase()}`}
-        onClick={async () => {
-          await navigator.clipboard.writeText(value)
-          toast.success(`${label} copied.`)
-        }}
-        className="flex size-9 shrink-0 items-center justify-center rounded-lg text-ink-faint hover:bg-surface hover:text-ink"
-      >
-        <IconCopy size={16} />
-      </button>
-    </div>
   )
 }
 

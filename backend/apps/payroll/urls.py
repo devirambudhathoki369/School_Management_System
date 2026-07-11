@@ -1,4 +1,4 @@
-from rest_framework.routers import DefaultRouter
+from apps.core.routers import ApiRouter
 
 from .views import (
     SalaryAccrualViewSet,
@@ -7,7 +7,7 @@ from .views import (
     StaffLookupViewSet,
 )
 
-router = DefaultRouter()
+router = ApiRouter()
 router.register("structures", SalaryStructureViewSet, basename="salary-structure")
 router.register("accruals", SalaryAccrualViewSet, basename="salary-accrual")
 router.register("payments", SalaryPaymentViewSet, basename="salary-payment")

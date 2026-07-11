@@ -1,4 +1,4 @@
-from rest_framework.routers import DefaultRouter
+from apps.core.routers import ApiRouter
 
 from .views import (
     ActivityDefinitionViewSet,
@@ -11,7 +11,7 @@ from .views import (
     SubjectResultSheetViewSet,
 )
 
-router = DefaultRouter()
+router = ApiRouter()
 router.register("exams", ExamViewSet, basename="exam")
 router.register("schedule", ExamScheduleEntryViewSet, basename="exam-schedule")
 router.register("grading-schemes", GradingSchemeViewSet, basename="grading-scheme")

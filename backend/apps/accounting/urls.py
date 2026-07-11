@@ -1,5 +1,5 @@
 from django.urls import path
-from rest_framework.routers import DefaultRouter
+from apps.core.routers import ApiRouter
 
 from .views import (
     FiscalYearViewSet,
@@ -9,7 +9,7 @@ from .views import (
     VoucherViewSet,
 )
 
-router = DefaultRouter()
+router = ApiRouter()
 router.register("fiscal-years", FiscalYearViewSet, basename="fiscal-year")
 router.register("ledgers", LedgerAccountViewSet, basename="ledger-account")
 router.register("opening-balances", OpeningBalanceViewSet, basename="opening-balance")

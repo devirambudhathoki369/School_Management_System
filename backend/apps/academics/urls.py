@@ -1,4 +1,4 @@
-from rest_framework.routers import DefaultRouter
+from apps.core.routers import ApiRouter
 
 from .views import (
     AcademicYearViewSet,
@@ -9,7 +9,7 @@ from .views import (
     SubjectViewSet,
 )
 
-router = DefaultRouter()
+router = ApiRouter()
 router.register("years", AcademicYearViewSet, basename="academic-year")
 router.register("year-pointers", CurrentYearPointerViewSet, basename="year-pointer")
 router.register("courses", CourseViewSet, basename="course")

@@ -1,8 +1,8 @@
-from rest_framework.routers import DefaultRouter
+from apps.core.routers import ApiRouter
 
 from .views import BusStationViewSet, ProximityAlertViewSet, RiderSubscriptionViewSet
 
-router = DefaultRouter()
+router = ApiRouter()
 router.register("stations", BusStationViewSet, basename="bus-station")
 router.register("riders", RiderSubscriptionViewSet, basename="rider")
 router.register("alerts", ProximityAlertViewSet, basename="proximity-alert")

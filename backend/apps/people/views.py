@@ -256,7 +256,7 @@ class GuardianViewSet(TenantScopedViewSet):
 
 
 class StaffViewSet(TenantScopedViewSet):
-    queryset = Staff.objects.select_related("role")
+    queryset = Staff.objects.select_related("role", "account")
     serializer_class = StaffSerializer
     allowed_roles = (Role.ADMIN,)  # staff records are admin-managed
     permission_code = "staff"
@@ -273,6 +273,75 @@ class StaffViewSet(TenantScopedViewSet):
                     last_name__icontains=term
                 )
         return qs.order_by("first_name", "last_name")
+
+    def perform_update(self, serializer):
+        """Module grants are security-sensitive: every change lands in the
+        append-only audit trail with the exact delta."""
+        before = set(serializer.instance.permissions or [])
+        super().perform_update(serializer)
+        after = set(serializer.instance.permissions or [])
+        if before != after:
+            from apps.audit.models import AuditEvent
+            from apps.audit.services import record as audit
+
+            audit(
+                action=AuditEvent.Action.UPDATE,
+                object_table="people.Staff",
+                object_id=serializer.instance.id,
+                actor=self.request.user,
+                school=self.request.school,
+                changes={
+                    "event": "permissions_change",
+                    "granted": sorted(after - before),
+                    "revoked": sorted(before - after),
+                },
+                request=self.request,
+            )
+
+    @extend_schema(summary="Provision, reset or revoke this staff member's login")
+    @action(detail=True, methods=["post", "delete"], url_path="login-access")
+    def login_access(self, request, pk=None):
+        from apps.audit.models import AuditEvent
+        from apps.audit.services import record as audit
+
+        from . import services
+
+        staff = self.get_object()
+        if request.method == "DELETE":
+            account_id = staff.account_id
+            if not services.revoke_staff_access(staff):
+                raise ValidationError("This staff member has no login.")
+            audit(
+                action=AuditEvent.Action.UPDATE,
+                object_table="identity.Account",
+                object_id=account_id,
+                actor=request.user,
+                school=request.school,
+                changes={"event": "login_revoked", "staff": str(staff.id)},
+                request=request,
+            )
+            return Response(status=204)
+        account, temp_password, created = services.provision_staff_access(staff)
+        audit(
+            action=AuditEvent.Action.CREATE if created else AuditEvent.Action.UPDATE,
+            object_table="identity.Account",
+            object_id=account.id,
+            actor=request.user,
+            school=request.school,
+            changes={
+                "event": "login_provisioned" if created else "login_reset",
+                "staff": str(staff.id),
+            },
+            request=request,
+        )
+        return Response(
+            {
+                "username": account.username,
+                "temp_password": temp_password,
+                "created": created,
+            },
+            status=201 if created else 200,
+        )
 
 
 class StaffRoleListView(ListAPIView):

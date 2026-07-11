@@ -78,6 +78,12 @@ class StaffRoleSerializer(serializers.ModelSerializer):
 class StaffSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(read_only=True)
     role_name = serializers.CharField(source="role.name", read_only=True)
+    # Login status for the admin's access-management UI. Read-only: accounts
+    # are provisioned/revoked only through the dedicated action, never by
+    # writing profile fields.
+    account_username = serializers.CharField(source="account.username", read_only=True)
+    account_active = serializers.BooleanField(source="account.is_active", read_only=True)
+    account_last_login = serializers.DateTimeField(source="account.last_login", read_only=True)
 
     def validate_permissions(self, value):
         from apps.core.permissions import permission_codes
@@ -96,6 +102,6 @@ class StaffSerializer(serializers.ModelSerializer):
             "role_name", "status", "gender", "birth_date_bs", "email",
             "primary_contact", "secondary_contact", "address", "qualification",
             "joined_date_bs", "rfid_card", "primary_subject", "secondary_subject",
-            "permissions",
+            "permissions", "account_username", "account_active", "account_last_login",
         ]
         read_only_fields = ["id"]

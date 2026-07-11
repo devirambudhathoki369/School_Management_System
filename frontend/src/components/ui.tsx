@@ -13,7 +13,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { formatMoney } from '../lib/format'
-import { IconAlert, IconCheck, IconSpinner, IconX } from './icons'
+import { IconAlert, IconCheck, IconCopy, IconSpinner, IconX } from './icons'
 
 /**
  * Shared UI primitives. Every module page composes these so the product
@@ -336,6 +336,31 @@ export function apiErrorMessage(error: unknown): string {
 }
 
 // ---------------------------------------------------------------- States
+
+/** One credential line with a copy button — the hand-over ceremony for
+ *  provisioned logins (temp passwords appear exactly once, so copying must
+ *  be effortless). */
+export function Credential({ label, value }: { label: string; value: string }) {
+  const toast = useToast()
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-sunken px-4 py-3">
+      <div className="min-w-0">
+        <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">{label}</p>
+        <p className="truncate font-mono text-base font-semibold tracking-wide">{value}</p>
+      </div>
+      <button
+        aria-label={`Copy ${label.toLowerCase()}`}
+        onClick={async () => {
+          await navigator.clipboard.writeText(value)
+          toast.success(`${label} copied.`)
+        }}
+        className="flex size-9 shrink-0 items-center justify-center rounded-lg text-ink-faint hover:bg-surface hover:text-ink"
+      >
+        <IconCopy size={16} />
+      </button>
+    </div>
+  )
+}
 
 export function Skeleton({ className = '' }: { className?: string }) {
   return <div className={`animate-pulse rounded-lg bg-surface-sunken ${className}`} />
