@@ -4,7 +4,7 @@ from django.db import transaction
 from rest_framework import serializers
 
 from apps.billing.services import charges as charge_service
-from apps.billing.services import serials
+from apps.billing.services import education_fee, serials
 
 from .models import (
     BillingYear,
@@ -151,8 +151,12 @@ class PaymentSerializer(TenantChildValidationMixin, serializers.ModelSerializer)
             "billing_year", "payment_month", "mode", "total_paid",
             "total_discount", "total_due", "remarks", "payer_name",
             "payer_address", "lines",
+            "edu_fee_pct", "edu_fee_base", "edu_fee_amount",
         ]
-        read_only_fields = ["id", "serial", "legacy_serial", "class_info", "total_paid"]
+        read_only_fields = [
+            "id", "serial", "legacy_serial", "class_info", "total_paid",
+            "edu_fee_pct", "edu_fee_base", "edu_fee_amount",
+        ]
 
     def get_receipt_no(self, payment) -> int | None:
         return payment.serial or payment.legacy_serial
@@ -172,8 +176,19 @@ class PaymentSerializer(TenantChildValidationMixin, serializers.ModelSerializer)
         request = self.context["request"]
         lines = validated_data.pop("lines")
         student = validated_data.get("student")
+        # Education Equality Fee: regular receipts only, levied where the
+        # vendor enabled the student's education level. Snapshotted on its
+        # own columns — a pass-through, never part of total_paid.
+        edu_fee = None
+        if validated_data["kind"] == FeeTitle.Kind.REGULAR and student and student.class_info_id:
+            edu_fee = education_fee.compute_fee(
+                request.school, student.class_info.education_level, lines
+            )
         with transaction.atomic():
             payment = Payment.objects.create(
+                edu_fee_pct=edu_fee["pct"] if edu_fee else None,
+                edu_fee_base=edu_fee["base"] if edu_fee else None,
+                edu_fee_amount=edu_fee["amount"] if edu_fee else None,
                 serial=serials.allocate(
                     request.school, validated_data["billing_year"], validated_data["kind"]
                 ),

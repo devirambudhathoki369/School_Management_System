@@ -290,3 +290,17 @@ cross-walk table used by every later phase and kept for support queries.
 - **`main_schoolhiddeneducationlevel`** — per-school education-level hiding, undocumented.
 - **`main_splashnotice`** — vendor splash banner, undocumented.
 - **M2 must be rewritten:** receipt serials are _intended_ to be unique per school+AY but are not in practice; the rebuild makes uniqueness real (new rows only).
+
+---
+
+## 7. Post-dump drift (legacy kept evolving after 2026-07-02)
+
+Cent-New migrations landed AFTER this dump was taken — none of these tables/columns
+exist in `smsys_legacy`; a **fresh production dump** is needed before their data can
+be imported:
+
+| Legacy addition (migration) | Rebuild status |
+| --- | --- |
+| `main_schooleducationequalityfee` (0069, +0070 seeds from the old `SchoolAdmin.preferences["education_service_fee_percent"]` — zero schools carry that pref in this dump) | `billing.EducationFeeLevel` + `Payment.edu_fee_*` snapshot columns built 2026-07-17; targeting starts empty (vendor sets it in Django admin). On a fresh dump: import rows → `EducationFeeLevel`, and invoice `extra_info["education_service_fee"]` snapshots → `Payment.edu_fee_*`. |
+| `main_batch` + `classinfo.batch` + `student.batch` (0066/0067) | Port pending (cohorts for program-level courses). |
+| `course.total_semesters` / `total_years` (0068) | Port pending. |

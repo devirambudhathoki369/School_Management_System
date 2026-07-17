@@ -122,10 +122,21 @@ export default function TransactionsReportPage() {
       </div>
 
       {summary && (
-        <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div
+          className={`mb-4 grid grid-cols-2 gap-3 ${
+            Number(summary.edu_fee) > 0 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'
+          }`}
+        >
           <StatCard label="Receipts" value={summary.count} tone="accent" icon={<IconReceipt size={16} />} />
           <StatCard label="Collected" value={`Rs. ${formatMoney(summary.total_paid)}`} tone="positive" />
           <StatCard label="Discount allowed" value={`Rs. ${formatMoney(summary.total_discount)}`} tone="warning" />
+          {Number(summary.edu_fee) > 0 && (
+            <StatCard
+              label="Education Equality Fee"
+              value={`Rs. ${formatMoney(summary.edu_fee)}`}
+              detail="3% govt. levy, on top of receipts"
+            />
+          )}
           <StatCard
             label="Serial range"
             value={

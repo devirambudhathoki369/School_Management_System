@@ -51,6 +51,7 @@ export interface TransactionRow {
   academic_year: string
   total_paid: string
   total_discount: string
+  edu_fee: string | null
   cashier: string
   is_active: boolean
   lines: Array<{ label: string; line_type: string; amount: string; discount: string }>
@@ -60,6 +61,7 @@ export interface TransactionsSummary {
   count: number
   total_paid: string
   total_discount: string
+  edu_fee: string
   date_from: string | null
   date_to: string | null
   serial_from: number | null

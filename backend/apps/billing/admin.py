@@ -5,6 +5,7 @@ from .models import (
     Charge,
     ChargeBatch,
     ChargeLine,
+    EducationFeeLevel,
     FeeSchedule,
     FeeTitle,
     Payment,
@@ -12,6 +13,16 @@ from .models import (
     ReceiptSerialCounter,
     StandingDiscount,
 )
+
+
+@admin.register(EducationFeeLevel)
+class EducationFeeLevelAdmin(admin.ModelAdmin):
+    """Vendor targeting for the Education Equality Fee (3% levy): one row
+    per (school, education level) that collects it. No rows = fee off."""
+
+    list_display = ["school", "education_level"]
+    list_filter = ["education_level", "school"]
+    search_fields = ["school__name"]
 
 
 class ChargeLineInline(admin.TabularInline):

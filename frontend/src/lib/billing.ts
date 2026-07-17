@@ -86,6 +86,11 @@ export interface Payment {
   payer_address: string
   lines?: PaymentLine[]
   student_name?: string
+  // Education Equality Fee snapshot — a 3% government pass-through collected
+  // ON TOP of the receipt; never part of total_paid.
+  edu_fee_pct: string | null
+  edu_fee_base: string | null
+  edu_fee_amount: string | null
 }
 
 export interface ChargeLine {
@@ -144,6 +149,7 @@ export interface StudentDetail {
   roll_no: string
   status: string
   contact: string
+  education_level: string | null
 }
 
 export function useStudentDetail(studentId: string | null) {
@@ -203,6 +209,21 @@ export function useBillingYears() {
   return useQuery({
     queryKey: ['billing', 'years'],
     queryFn: () => fetchAllPages<BillingYear>('/api/v1/billing/years/'),
+    staleTime: 60 * 60 * 1000,
+  })
+}
+
+/** Education levels where the school collects the 3% Education Equality Fee
+ * (vendor-set). Empty = the levy is off for this school. */
+export function useEducationFeeLevels() {
+  return useQuery({
+    queryKey: ['billing', 'education-fee-levels'],
+    queryFn: async () =>
+      (
+        await api.get<{ enabled: string[]; percent: string }>(
+          '/api/v1/billing/education-fee-levels/',
+        )
+      ).data,
     staleTime: 60 * 60 * 1000,
   })
 }

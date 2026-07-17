@@ -5,6 +5,7 @@ from .views import (
     BillingYearListView,
     ChargeBatchViewSet,
     ChargeViewSet,
+    EducationFeeLevelsView,
     FeeScheduleViewSet,
     FeeTitleViewSet,
     PaymentViewSet,
@@ -21,5 +22,10 @@ router.register("payments", PaymentViewSet, basename="payment")
 
 urlpatterns = [
     path("years/", BillingYearListView.as_view(), name="billing-years"),
+    path(
+        "education-fee-levels/",
+        EducationFeeLevelsView.as_view(),
+        name="billing-education-fee-levels",
+    ),
     *router.urls,
 ]

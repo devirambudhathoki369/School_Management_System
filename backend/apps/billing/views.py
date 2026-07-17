@@ -1,13 +1,16 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from apps.core.permissions import RoleAllowed
+from apps.core.permissions import ModulePermissionAllowed, RoleAllowed
 from apps.core.viewsets import TenantScopedViewSet
 from apps.identity.models import Role
 from apps.people.models import Student
+from apps.tenants.services import resolve_school_for
 
 from .models import (
     BillingYear,
@@ -28,8 +31,29 @@ from .serializers import (
     StandingDiscountSerializer,
 )
 from .services.dues import student_dues
+from .services import education_fee
 
 MANAGERS = (Role.ADMIN, Role.STAFF)
+
+
+class EducationFeeLevelsView(APIView):
+    """Education Equality Fee targeting for the caller's school.
+
+    Vendor-set (Django admin); the Collect screen reads this to preview the
+    3% government levy only for students whose education level is enabled."""
+
+    permission_classes = [IsAuthenticated, RoleAllowed, ModulePermissionAllowed]
+    allowed_roles = MANAGERS
+    permission_code = "billing"
+
+    def get(self, request):
+        school = resolve_school_for(request.user)
+        if school is None:
+            raise PermissionDenied("No school is associated with this account.")
+        return Response({
+            "enabled": education_fee.enabled_levels(school),
+            "percent": str(education_fee.EDU_FEE_PERCENT),
+        })
 
 
 class BillingYearListView(ListAPIView):

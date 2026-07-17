@@ -120,6 +120,7 @@ class TransactionsReportView(ReportView):
             count=Count("id"),
             total_paid=Sum("total_paid"),
             total_discount=Sum("total_discount"),
+            edu_fee=Sum("edu_fee_amount"),
             date_from=Min("date_bs"),
             date_to=Max("date_bs"),
             serial_from=Min(Coalesce("serial", "legacy_serial")),
@@ -154,6 +155,7 @@ class TransactionsReportView(ReportView):
                 "academic_year": p.academic_year.name,
                 "total_paid": p.total_paid,
                 "total_discount": p.total_discount or ZERO,
+                "edu_fee": p.edu_fee_amount,
                 "cashier": actor_label(p.created_by),
                 "is_active": p.is_active,
                 "lines": [
@@ -168,6 +170,7 @@ class TransactionsReportView(ReportView):
                 "count": summary["count"],
                 "total_paid": summary["total_paid"] or ZERO,
                 "total_discount": summary["total_discount"] or ZERO,
+                "edu_fee": summary["edu_fee"] or ZERO,
                 "date_from": summary["date_from"],
                 "date_to": summary["date_to"],
                 "serial_from": summary["serial_from"],

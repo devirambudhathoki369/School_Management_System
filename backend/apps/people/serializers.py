@@ -46,13 +46,17 @@ class StudentDetailSerializer(serializers.ModelSerializer):
     guardians = StudentGuardianSerializer(source="guardian_links", many=True, read_only=True)
     class_label = serializers.CharField(source="class_info.__str__", read_only=True)
     academic_year_name = serializers.CharField(source="academic_year.name", read_only=True)
+    # Billing needs the level for the Education Equality Fee preview.
+    education_level = serializers.CharField(
+        source="class_info.education_level", read_only=True, default=None
+    )
 
     class Meta:
         model = Student
         fields = [
             "id", "first_name", "middle_name", "last_name", "birth_date_bs", "gender",
             "email", "contact", "address", "status", "class_info", "academic_year",
-            "class_label", "academic_year_name",
+            "class_label", "academic_year_name", "education_level",
             "roll_no", "symbol_no", "regd_no", "emis", "rfid_card",
             "previous_school", "remarks", "ethnicity", "blood_group", "photo",
             "guardians",

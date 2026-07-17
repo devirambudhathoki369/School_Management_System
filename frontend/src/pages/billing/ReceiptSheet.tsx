@@ -124,6 +124,26 @@ export function ReceiptSheet({
               {formatMoney(payment.total_paid)}
             </td>
           </tr>
+          {Number(payment.edu_fee_amount) > 0 && (
+            <>
+              <tr>
+                <td colSpan={3} className="py-1 pl-2 text-right">
+                  Education Equality Fee ({Number(payment.edu_fee_pct)}% govt. levy)
+                </td>
+                <td className="py-1 pl-2 text-right tabular-nums">
+                  {formatMoney(payment.edu_fee_amount!)}
+                </td>
+              </tr>
+              <tr className="border-t border-black font-bold">
+                <td colSpan={3} className="py-1.5 pl-2 text-right">
+                  Grand total (Rs.)
+                </td>
+                <td className="py-1.5 pl-2 text-right tabular-nums">
+                  {formatMoney(Number(payment.total_paid) + Number(payment.edu_fee_amount))}
+                </td>
+              </tr>
+            </>
+          )}
           {payment.kind === 'regular' && Number(payment.total_discount) > 0 && (
             <tr className="text-xs">
               <td colSpan={4} className="pt-1 text-right italic">

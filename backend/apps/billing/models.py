@@ -27,7 +27,7 @@ not JSON spelunking. Money invariants preserved (§19):
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
 
-from apps.academics.models import AcademicYear, ClassInfo
+from apps.academics.models import AcademicYear, ClassInfo, EducationLevel
 from apps.core.models import BaseModel, TenantScopedModel
 from apps.people.models import Student
 from apps.tenants.models import School
@@ -105,6 +105,30 @@ class StandingDiscount(TenantScopedModel):
 
     def __str__(self):
         return f"{self.student}: {self.fee_title or 'transport'}"
+
+
+class EducationFeeLevel(BaseModel):
+    """A (school, education level) the vendor has enabled for the Education
+    Equality Fee (शिक्षा समता शुल्क) — Nepal's 3% government levy.
+
+    Opt-IN: a row means the 3% applies to every class in that education
+    level for that school; no row means it does not (default off). Vendor-
+    managed through the Django admin. See services/education_fee.py."""
+
+    school = models.ForeignKey(
+        School, on_delete=models.CASCADE, related_name="education_fee_levels"
+    )
+    education_level = models.CharField(max_length=20, choices=EducationLevel.choices)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["school", "education_level"], name="uniq_education_fee_level"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.school}: {self.get_education_level_display()}"
 
 
 class LineType(models.TextChoices):
@@ -239,6 +263,12 @@ class Payment(TenantScopedModel):
     remarks = models.CharField(max_length=250, blank=True, default="")
     payer_name = models.CharField(max_length=100, blank=True, default="")
     payer_address = models.CharField(max_length=150, blank=True, default="")
+    # Education Equality Fee snapshot (services/education_fee.py): a
+    # government pass-through collected ON TOP of the receipt. Never part
+    # of total_paid — dues and revenue reconciliation must not see it.
+    edu_fee_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    edu_fee_base = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    edu_fee_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     created_by = models.ForeignKey(
         "identity.Account", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )

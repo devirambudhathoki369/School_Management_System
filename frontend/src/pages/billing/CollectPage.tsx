@@ -6,6 +6,7 @@ import {
   discountValue,
   useBillingYears,
   useCalendar,
+  useEducationFeeLevels,
   useFeeSchedules,
   useStudentDetail,
   useStudentDiscounts,
@@ -104,6 +105,22 @@ export default function CollectPage() {
   const totalDiscount = sumAmounts(lines.map((l) => l.discount))
   const duesNow = dues.data ? Number(dues.data.dues) : null
   const duesAfter = duesNow === null ? null : duesNow - totalAmount - totalDiscount
+
+  // Education Equality Fee (3% government levy) preview. Mirrors the server:
+  // regular receipts only, levied where the vendor enabled the student's
+  // education level; base is net-after-discount, collected ON TOP of the
+  // receipt (never inside its totals).
+  const eduLevels = useEducationFeeLevels()
+  const eduFeeApplies =
+    kind === 'regular' &&
+    !!detail.data?.education_level &&
+    (eduLevels.data?.enabled ?? []).includes(detail.data.education_level)
+  const eduFeeBase = lines.reduce((sum, l) => {
+    if (l.line_type === 'discount') return sum
+    const net = Number(l.amount || 0) - Number(l.discount || 0)
+    return net > 0 ? sum + net : sum
+  }, 0)
+  const eduFee = eduFeeApplies ? Math.round(eduFeeBase * 3) / 100 : 0
 
   function resetDraft() {
     setLines([])
@@ -206,6 +223,8 @@ export default function CollectPage() {
           <p className="mt-1 text-sm text-ink-muted">
             Rs. {formatMoney(completed.payment.total_paid)} received
             {completed.student ? ` from ${completed.student.full_name}` : ''}.
+            {Number(completed.payment.edu_fee_amount) > 0 &&
+              ` Plus Rs. ${formatMoney(completed.payment.edu_fee_amount!)} Education Equality Fee (3% govt. levy).`}
           </p>
           <div className="mt-5 flex flex-wrap justify-center gap-2">
             <Button onClick={() => window.print()}>
@@ -442,6 +461,19 @@ export default function CollectPage() {
               value={duesAfter === null ? '…' : <Money value={duesAfter} />}
               detail={duesAfter !== null && duesAfter < 0 ? 'Advance / prepaid' : undefined}
             />
+          </div>
+        )}
+
+        {eduFeeApplies && eduFee > 0 && (
+          <div className="rounded-xl border border-accent-soft bg-accent-soft/40 px-4 py-3 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-medium">Education Equality Fee (3%)</span>
+              <span className="font-semibold tabular-nums">Rs. {formatMoney(eduFee)}</span>
+            </div>
+            <p className="mt-0.5 text-xs text-ink-muted">
+              Government levy collected on top of this receipt — not part of the
+              student&apos;s dues or the school&apos;s income.
+            </p>
           </div>
         )}
 
