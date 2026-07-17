@@ -17,6 +17,7 @@ urlpatterns = [
     path("health/", include("apps.core.urls")),
     path("api/v1/meta/calendar/", CalendarView.as_view(), name="meta-calendar"),
     path("api/v1/reports/dashboard/", DashboardView.as_view(), name="reports-dashboard"),
+    path("api/v1/reports/", include("apps.reports.urls")),
     path("api/v1/auth/", include("apps.identity.urls")),
     path("api/v1/academics/", include("apps.academics.urls")),
     path("api/v1/people/", include("apps.people.urls")),

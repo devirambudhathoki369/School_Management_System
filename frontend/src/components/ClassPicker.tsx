@@ -19,6 +19,7 @@ export default function ClassPicker({
   initialYearId,
   currentLabel,
   allowAnyClass = false,
+  yearId: controlledYearId,
 }: {
   classId: string
   onChange: (classId: string, cls: ClassInfoFull | null) => void
@@ -28,20 +29,70 @@ export default function ClassPicker({
   currentLabel?: string
   /** Adds an "All classes" empty option instead of a required placeholder. */
   allowAnyClass?: boolean
+  /**
+   * Controlled mode: the page already owns a year filter. The embedded year
+   * select is hidden and the class list follows this year instead — without
+   * this, a page shows two "Academic year" controls that can disagree.
+   */
+  yearId?: string
 }) {
+  const controlled = controlledYearId !== undefined
   const years = useAcademicYearsFull()
   const pointers = useYearPointersFull()
-  const [yearId, setYearId] = useState(initialYearId ?? '')
+  const [ownYearId, setOwnYearId] = useState(initialYearId ?? '')
+  const yearId = controlled ? controlledYearId : ownYearId
   const classes = useClassesOfYear(yearId || null)
 
   useEffect(() => {
-    if (!yearId && years.data) {
-      setYearId(initialYearId || defaultYearId(years.data, pointers.data))
+    if (!controlled && !ownYearId && years.data) {
+      setOwnYearId(initialYearId || defaultYearId(years.data, pointers.data))
     }
-  }, [yearId, years.data, pointers.data, initialYearId])
+  }, [controlled, ownYearId, years.data, pointers.data, initialYearId])
 
   const rows = [...(classes.data ?? [])].sort((a, b) => a.label.localeCompare(b.label))
   const known = rows.some((c) => c.id === classId)
+
+  // Controlled year changed under a selected class: a class from another year
+  // would silently filter the page down to nothing, so clear the selection.
+  useEffect(() => {
+    if (controlled && classId && classes.isSuccess && !known && !currentLabel) {
+      onChange('', null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [controlled, classId, classes.isSuccess, known, currentLabel])
+
+  if (controlled) {
+    return (
+      <Field label="Class">
+        <Select
+          value={classId}
+          onChange={(e) => {
+            const cls = rows.find((c) => c.id === e.target.value) ?? null
+            onChange(e.target.value, cls)
+          }}
+          disabled={!yearId}
+        >
+          <option value="">
+            {!yearId
+              ? 'Pick a year first'
+              : classes.isLoading
+                ? 'Loading classes…'
+                : allowAnyClass
+                  ? 'All classes'
+                  : 'Choose a class…'}
+          </option>
+          {!known && classId && currentLabel && (
+            <option value={classId}>{currentLabel}</option>
+          )}
+          {rows.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label}
+            </option>
+          ))}
+        </Select>
+      </Field>
+    )
+  }
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -49,7 +100,7 @@ export default function ClassPicker({
         <Select
           value={yearId}
           onChange={(e) => {
-            setYearId(e.target.value)
+            setOwnYearId(e.target.value)
             onChange('', null)
           }}
         >

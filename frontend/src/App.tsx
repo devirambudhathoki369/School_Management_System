@@ -69,6 +69,21 @@ import SalarySheetPage from './pages/payroll/SalarySheetPage'
 import PostingsPage from './pages/payroll/PostingsPage'
 import LedgerPage from './pages/payroll/LedgerPage'
 import StructuresPage from './pages/payroll/StructuresPage'
+import ReportsLayout, { ReportsIndex } from './pages/reports/ReportsLayout'
+import TransactionsReportPage from './pages/reports/TransactionsReportPage'
+import PostingsReportPage from './pages/reports/PostingsReportPage'
+import DuesReportPage from './pages/reports/DuesReportPage'
+import LedgersReportPage from './pages/reports/LedgersReportPage'
+import IncomePlanPage from './pages/reports/IncomePlanPage'
+import DiscountsReportPage from './pages/reports/DiscountsReportPage'
+import OpeningBalancesPage from './pages/reports/OpeningBalancesPage'
+import AdmissionsReportPage from './pages/reports/AdmissionsReportPage'
+import StaffReportPage from './pages/reports/StaffReportPage'
+import TransportReportPage from './pages/reports/TransportReportPage'
+import HomeworkReportPage from './pages/reports/HomeworkReportPage'
+import AttendanceReportPage from './pages/reports/AttendanceReportPage'
+import IntegrityReportPage from './pages/reports/IntegrityReportPage'
+import DemographicsPage from './pages/reports/DemographicsPage'
 import { useAuth } from './lib/auth'
 import { ForcedPasswordChange } from './components/ChangePassword'
 import PortalShell from './layouts/PortalShell'
@@ -211,6 +226,23 @@ export default function App() {
             <Route path="punches" element={<PunchLogPage />} />
           </Route>
           <Route path="/audit" element={<AuditLogPage />} />
+          <Route path="/reports" element={<ReportsLayout />}>
+            <Route index element={<ReportsIndex />} />
+            <Route path="transactions" element={<TransactionsReportPage />} />
+            <Route path="postings" element={<PostingsReportPage />} />
+            <Route path="dues" element={<DuesReportPage />} />
+            <Route path="ledgers" element={<LedgersReportPage />} />
+            <Route path="income-plan" element={<IncomePlanPage />} />
+            <Route path="discounts" element={<DiscountsReportPage />} />
+            <Route path="opening-balances" element={<OpeningBalancesPage />} />
+            <Route path="admissions" element={<AdmissionsReportPage />} />
+            <Route path="staff" element={<StaffReportPage />} />
+            <Route path="transport" element={<TransportReportPage />} />
+            <Route path="homework" element={<HomeworkReportPage />} />
+            <Route path="attendance" element={<AttendanceReportPage />} />
+            <Route path="demographics" element={<DemographicsPage />} />
+            <Route path="integrity" element={<IntegrityReportPage />} />
+          </Route>
           <Route path="/attendance" element={<AttendanceLayout />}>
             <Route index element={<Navigate to="mark" replace />} />
             <Route path="mark" element={<MarkClassPage />} />

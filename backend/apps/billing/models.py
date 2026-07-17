@@ -171,6 +171,14 @@ class ChargeLine(BaseModel):
     label = models.CharField(max_length=60)  # M4: title-name snapshot at write time
     amount = models.DecimalField(max_digits=12, decimal_places=2)  # cfo lines are negative
 
+    @property
+    def display_label(self):
+        # 82% of legacy snapshots stored the raw title id ("18") instead of a
+        # name; M4 still wins whenever the snapshot is an actual name.
+        if self.label.isdigit() and self.fee_title_id and self.fee_title:
+            return self.fee_title.name
+        return self.label
+
     def __str__(self):
         return f"{self.label}: {self.amount}"
 
@@ -265,6 +273,13 @@ class PaymentLine(BaseModel):
     due_after = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)  # due
     tax_pct = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)  # tdsp
     tax_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)  # tdsa
+
+    @property
+    def display_label(self):
+        # Same numeric-snapshot repair as ChargeLine.display_label.
+        if self.label.isdigit() and self.fee_title_id and self.fee_title:
+            return self.fee_title.name
+        return self.label
 
     def __str__(self):
         return f"{self.label}: {self.amount}"

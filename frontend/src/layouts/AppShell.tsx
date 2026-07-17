@@ -23,6 +23,7 @@ import {
   IconScan,
   IconShield,
   IconStudents,
+  IconTable,
   IconWallet,
 } from '../components/icons'
 
@@ -38,7 +39,7 @@ import {
  * title and today's BS date.
  */
 
-type Leaf = { label: string; to: string; adminOnly?: boolean }
+type Leaf = { label: string; to: string; adminOnly?: boolean; needs?: string[] }
 type Group = {
   label: string
   icon: ComponentType<{ size?: number }>
@@ -222,6 +223,34 @@ const NAV: Section[] = [
     title: 'Oversight',
     groups: [
       {
+        label: 'Reports',
+        icon: IconTable,
+        needs: [
+          'billing.view', 'billing.manage',
+          'students.view', 'students.manage',
+          'staff.view', 'staff.manage',
+          'transport.view', 'transport.manage',
+          'homework.view', 'homework.manage',
+          'attendance.view', 'attendance.manage',
+        ],
+        children: [
+          { label: 'Transactions', to: '/reports/transactions', needs: ['billing.view', 'billing.manage'] },
+          { label: 'Billing runs', to: '/reports/postings', needs: ['billing.view', 'billing.manage'] },
+          { label: 'Remaining dues', to: '/reports/dues', needs: ['billing.view', 'billing.manage'] },
+          { label: 'Student ledgers', to: '/reports/ledgers', needs: ['billing.view', 'billing.manage'] },
+          { label: 'Income plan', to: '/reports/income-plan', needs: ['billing.view', 'billing.manage'] },
+          { label: 'Discounts', to: '/reports/discounts', needs: ['billing.view', 'billing.manage'] },
+          { label: 'Opening balances', to: '/reports/opening-balances', needs: ['billing.view', 'billing.manage'] },
+          { label: 'Admissions', to: '/reports/admissions', needs: ['students.view', 'students.manage'] },
+          { label: 'Staff details', to: '/reports/staff', needs: ['staff.view', 'staff.manage'] },
+          { label: 'Transport', to: '/reports/transport', needs: ['transport.view', 'transport.manage'] },
+          { label: 'Homework', to: '/reports/homework', needs: ['homework.view', 'homework.manage'] },
+          { label: 'Attendance', to: '/reports/attendance', needs: ['attendance.view', 'attendance.manage'] },
+          { label: 'Demographics', to: '/reports/demographics', needs: ['students.view', 'students.manage'] },
+          { label: 'Integrity', to: '/reports/integrity', adminOnly: true },
+        ],
+      },
+      {
         label: 'Audit log',
         icon: IconShield,
         adminOnly: true,
@@ -241,9 +270,21 @@ function useVisibleNav(): Section[] {
       if (!group.needs) return true
       return isAdmin || group.needs.some((code) => granted.has(code))
     }
+    const leafVisible = (leaf: Leaf) => {
+      if (leaf.adminOnly && !isAdmin) return false
+      if (!leaf.needs) return true
+      return isAdmin || leaf.needs.some((code) => granted.has(code))
+    }
     return NAV.map((section) => ({
       ...section,
-      groups: section.groups.filter(groupVisible),
+      groups: section.groups
+        .filter(groupVisible)
+        .map((group) =>
+          group.children
+            ? { ...group, children: group.children.filter(leafVisible) }
+            : group,
+        )
+        .filter((group) => group.to || (group.children?.length ?? 0) > 0),
     })).filter((section) => section.groups.length > 0)
   }, [account])
 }

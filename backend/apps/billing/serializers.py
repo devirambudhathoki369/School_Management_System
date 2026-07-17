@@ -79,6 +79,11 @@ class ChargeLineSerializer(serializers.ModelSerializer):
         model = ChargeLine
         fields = ["id", "line_type", "fee_title", "label", "amount"]
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["label"] = instance.display_label
+        return data
+
 
 class ChargeSerializer(serializers.ModelSerializer):
     lines = ChargeLineSerializer(many=True, read_only=True)
@@ -123,6 +128,13 @@ class PaymentLineSerializer(serializers.ModelSerializer):
             "discount", "due_after", "tax_pct", "tax_amount",
         ]
         read_only_fields = ["id"]
+
+    # label stays writable (receipt entry posts it); reads repair the legacy
+    # numeric-id snapshots through display_label.
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["label"] = instance.display_label
+        return data
 
 
 class PaymentSerializer(TenantChildValidationMixin, serializers.ModelSerializer):
