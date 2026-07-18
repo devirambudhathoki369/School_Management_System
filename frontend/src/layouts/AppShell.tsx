@@ -56,7 +56,10 @@ type Section = { title: string; groups: Group[] }
 const NAV: Section[] = [
   {
     title: 'Overview',
-    groups: [{ label: 'Dashboard', icon: IconDashboard, to: '/dashboard' }],
+    groups: [
+      { label: 'Dashboard', icon: IconDashboard, to: '/dashboard' },
+      { label: 'Support', icon: IconShield, to: '/support' },
+    ],
   },
   {
     title: 'People',
