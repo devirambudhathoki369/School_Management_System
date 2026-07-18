@@ -181,6 +181,8 @@ const NAV: Section[] = [
           { label: 'Books & copies', to: '/library/books' },
           { label: 'Issue / return', to: '/library/circulation' },
           { label: 'Library setup', to: '/library/settings' },
+          { label: 'Library reports', to: '/library/reports' },
+          { label: 'Barcodes', to: '/library/barcodes' },
         ],
       },
       {

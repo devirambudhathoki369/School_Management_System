@@ -24,6 +24,7 @@ import LibraryLayout from './pages/library/LibraryLayout'
 import BooksPage from './pages/library/BooksPage'
 import CirculationPage from './pages/library/CirculationPage'
 import LibSettingsPage from './pages/library/LibSettingsPage'
+import LibraryReportsPage, { BarcodesPage } from './pages/library/LibraryReportsPage'
 import TransportLayout from './pages/transport/TransportLayout'
 import StationsPage from './pages/transport/StationsPage'
 import RidersPage from './pages/transport/RidersPage'
@@ -197,6 +198,8 @@ export default function App() {
             <Route index element={<Navigate to="books" replace />} />
             <Route path="books" element={<BooksPage />} />
             <Route path="circulation" element={<CirculationPage />} />
+            <Route path="reports" element={<LibraryReportsPage />} />
+            <Route path="barcodes" element={<BarcodesPage />} />
             <Route path="settings" element={<LibSettingsPage />} />
           </Route>
           <Route path="/transport" element={<TransportLayout />}>

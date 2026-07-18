@@ -81,7 +81,7 @@ class Migration(migrations.Migration):
             ],
             options={
                 'abstract': False,
-                'base_manager_name': 'all_objects',
+                'base_manager_name': '   ',
                 'default_manager_name': 'objects',
             },
             managers=[
