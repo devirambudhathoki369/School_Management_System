@@ -52,6 +52,22 @@ export interface CourseRow {
   id: string
   name: string
   education_level: string
+  // Program length — either year-wise or semester-wise, never both.
+  total_years: number | null
+  total_semesters: number | null
+}
+
+export interface BatchRow {
+  id: string
+  course: string | null
+  course_name: string
+  education_level: string
+  year: string
+  start_academic_year: string | null
+  start_academic_year_name: string
+  current_semester: number | null
+  current_year: number | null
+  graduated: boolean
 }
 
 export interface SectionRow {
@@ -155,6 +171,14 @@ export function useSections() {
   return useQuery({
     queryKey: ['academics', 'sections'],
     queryFn: () => fetchAllPages<SectionRow>('/api/v1/academics/sections/'),
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useBatches() {
+  return useQuery({
+    queryKey: ['academics', 'batches'],
+    queryFn: () => fetchAllPages<BatchRow>('/api/v1/academics/batches/'),
     staleTime: 5 * 60 * 1000,
   })
 }

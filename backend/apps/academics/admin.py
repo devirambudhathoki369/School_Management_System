@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import AcademicYear, ClassInfo, Course, CurrentYearPointer, Section, Subject
+from .models import AcademicYear, Batch, ClassInfo, Course, CurrentYearPointer, Section, Subject
 
 
 @admin.register(AcademicYear)
@@ -22,6 +22,14 @@ class SubjectAdmin(admin.ModelAdmin):
     list_display = ["name", "code", "type", "class_info", "school", "is_protected"]
     list_filter = ["type", "is_protected"]
     search_fields = ["name", "code"]
+
+
+@admin.register(Batch)
+class BatchAdmin(admin.ModelAdmin):
+    list_display = ["__str__", "school", "year", "course",
+                    "current_semester", "current_year", "graduated"]
+    list_filter = ["graduated"]
+    search_fields = ["year", "course__name", "school__name"]
 
 
 admin.site.register([CurrentYearPointer, Course, Section])

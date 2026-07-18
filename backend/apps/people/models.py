@@ -67,6 +67,12 @@ class Student(TenantScopedModel):
     academic_year = models.ForeignKey(
         AcademicYear, on_delete=models.PROTECT, related_name="students"
     )
+    # Immutable cohort identity for higher-ed students (academics.Batch);
+    # NULL for school-level students. The class advances, the batch never does.
+    batch = models.ForeignKey(
+        "academics.Batch", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="students",
+    )
 
     roll_no = models.CharField(max_length=15, blank=True, default="")
     symbol_no = models.CharField(max_length=15, blank=True, default="")

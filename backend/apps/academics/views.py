@@ -7,9 +7,11 @@ from rest_framework.response import Response
 from apps.core.viewsets import TenantScopedViewSet
 from apps.identity.models import Role
 
-from .models import AcademicYear, ClassInfo, Course, CurrentYearPointer, Section, Subject
+from . import services
+from .models import AcademicYear, Batch, ClassInfo, Course, CurrentYearPointer, Section, Subject
 from .serializers import (
     AcademicYearSerializer,
+    BatchSerializer,
     ClassInfoSerializer,
     CourseSerializer,
     CurrentYearPointerSerializer,
@@ -101,6 +103,38 @@ class CourseViewSet(TenantScopedViewSet):
     def perform_destroy(self, instance):
         if instance.classinfo_set.exists():
             raise ValidationError("Course is used by classes and cannot be deleted.")
+        instance.soft_delete()
+
+    @extend_schema(summary="Promote every cohort of this program up one level")
+    @action(detail=True, methods=["post"], url_path="promote-program")
+    def promote_program(self, request, pk=None):
+        """Batch-aware year-end step: dry-run unless {"apply": true}. Admin
+        only — it rewrites student placements (see services.promote_program)."""
+        if request.user.role != Role.ADMIN:
+            raise PermissionDenied("Only the school admin can promote a program.")
+        result = services.promote_program(
+            request.school, self.get_object(), apply=bool(request.data.get("apply"))
+        )
+        return Response(result)
+
+
+class BatchViewSet(TenantScopedViewSet):
+    """Cohort/intake registry for higher-ed programs. Additive: managing
+    batches here touches no class, student, fee or exam row."""
+
+    queryset = Batch.objects.select_related("course", "start_academic_year").order_by(
+        "-year", "course__name"
+    )
+    serializer_class = BatchSerializer
+    allowed_roles = MANAGERS
+    permission_code = "academics"
+    filterset_fields = ["course", "graduated"]
+
+    def perform_destroy(self, instance):
+        if instance.classes.exists():
+            raise ValidationError("Batch is stamped on classes and cannot be deleted.")
+        if instance.students.exists():
+            raise ValidationError("Batch has students and cannot be deleted.")
         instance.soft_delete()
 
 

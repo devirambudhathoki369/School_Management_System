@@ -6,6 +6,7 @@ const TABS = [
   { to: '/academics/classes', label: 'Classes' },
   { to: '/academics/subjects', label: 'Subjects' },
   { to: '/academics/structure', label: 'Courses & sections' },
+  { to: '/academics/batches', label: 'Batches' },
   { to: '/academics/years', label: 'Years' },
 ]
 

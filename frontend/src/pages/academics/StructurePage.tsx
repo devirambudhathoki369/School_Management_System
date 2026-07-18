@@ -105,15 +105,23 @@ function CourseModal({ course, onClose }: { course: CourseRow | null; onClose: (
   const queryClient = useQueryClient()
   const [name, setName] = useState(course?.name ?? '')
   const [level, setLevel] = useState(course?.education_level ?? 'bachelor')
+  const [totalYears, setTotalYears] = useState(course?.total_years?.toString() ?? '')
+  const [totalSemesters, setTotalSemesters] = useState(
+    course?.total_semesters?.toString() ?? '',
+  )
 
   const save = useMutation({
-    mutationFn: () =>
-      course
-        ? api.patch(`/api/v1/academics/courses/${course.id}/`, {
-            name: name.trim(),
-            education_level: level,
-          })
-        : api.post('/api/v1/academics/courses/', { name: name.trim(), education_level: level }),
+    mutationFn: () => {
+      const payload = {
+        name: name.trim(),
+        education_level: level,
+        total_years: totalYears ? Number(totalYears) : null,
+        total_semesters: totalSemesters ? Number(totalSemesters) : null,
+      }
+      return course
+        ? api.patch(`/api/v1/academics/courses/${course.id}/`, payload)
+        : api.post('/api/v1/academics/courses/', payload)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['academics', 'courses'] })
       toast.success(course ? 'Course updated.' : 'Course created.')
@@ -151,6 +159,34 @@ function CourseModal({ course, onClose }: { course: CourseRow | null; onClose: (
             ))}
           </Select>
         </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Total years" hint="Year-wise programs (Diploma Forestry: 3)">
+            <Input
+              type="number"
+              min={1}
+              max={6}
+              value={totalYears}
+              onChange={(e) => {
+                setTotalYears(e.target.value)
+                if (e.target.value) setTotalSemesters('')
+              }}
+              placeholder="—"
+            />
+          </Field>
+          <Field label="Total semesters" hint="Semester-wise programs (BCA: 8)">
+            <Input
+              type="number"
+              min={1}
+              max={12}
+              value={totalSemesters}
+              onChange={(e) => {
+                setTotalSemesters(e.target.value)
+                if (e.target.value) setTotalYears('')
+              }}
+              placeholder="—"
+            />
+          </Field>
+        </div>
       </div>
     </Modal>
   )

@@ -10,6 +10,7 @@ import AcademicsLayout from './pages/academics/AcademicsLayout'
 import ClassesPage from './pages/academics/ClassesPage'
 import SubjectsPage from './pages/academics/SubjectsPage'
 import StructurePage from './pages/academics/StructurePage'
+import CohortBatchesPage from './pages/academics/BatchesPage'
 import YearsPage from './pages/academics/YearsPage'
 import HomeworkPage from './pages/homework/HomeworkPage'
 import CommunicationLayout from './pages/communication/CommunicationLayout'
@@ -172,6 +173,7 @@ export default function App() {
             <Route path="classes" element={<ClassesPage />} />
             <Route path="subjects" element={<SubjectsPage />} />
             <Route path="structure" element={<StructurePage />} />
+            <Route path="batches" element={<CohortBatchesPage />} />
             <Route path="years" element={<YearsPage />} />
           </Route>
           <Route path="/homework" element={<HomeworkPage />} />

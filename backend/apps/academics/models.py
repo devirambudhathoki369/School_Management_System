@@ -96,10 +96,57 @@ class CurrentYearPointer(TenantScopedModel):
 class Course(TenantScopedModel):
     name = models.CharField(max_length=50)
     education_level = models.CharField(max_length=20, choices=EducationLevel.choices)
+    # Program length — a course runs EITHER semester-wise (BCA: 8 semesters)
+    # OR year-wise (diploma Forestry/Pharmacy: 3 years). At most one is set;
+    # promotion and batch tooling read it to know the final term.
+    total_years = models.PositiveSmallIntegerField(null=True, blank=True)
+    total_semesters = models.PositiveSmallIntegerField(null=True, blank=True)
     legacy_id = models.BigIntegerField(null=True, blank=True, unique=True)
 
     def __str__(self):
         return self.name
+
+
+class Batch(TenantScopedModel):
+    """A cohort/intake for higher-education programs (bachelor / master /
+    diploma / pre-diploma).
+
+    The batch is a student's IMMUTABLE identity for life — the semester or
+    year they are in is just a counter that advances on promotion. Stamping
+    classes with a batch lets two intakes sit in the same course+semester at
+    once (2078 and 2079 both in BCA sem-1 during an overlap) without
+    collapsing onto one ClassInfo row. Purely additive: un-batched (school)
+    data never references it."""
+
+    course = models.ForeignKey(
+        Course, null=True, blank=True, on_delete=models.PROTECT, related_name="batches"
+    )
+    # Admission year in Bikram Sambat ("2079") — the cohort's stable name.
+    year = models.CharField(max_length=9)
+    start_academic_year = models.ForeignKey(
+        AcademicYear, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    # Convenience pointer to the cohort's current term; the authoritative
+    # per-term rows are the ClassInfo rows the batch has passed through.
+    # Exactly one of these carries the term (semester-wise vs year-wise).
+    current_semester = models.PositiveSmallIntegerField(null=True, blank=True)
+    current_year = models.PositiveSmallIntegerField(null=True, blank=True)
+    # Set once the cohort finishes its final term; history stays intact.
+    graduated = models.BooleanField(default=False)
+    legacy_id = models.BigIntegerField(null=True, blank=True, unique=True)
+
+    class Meta(TenantScopedModel.Meta):
+        verbose_name_plural = "Batches"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["school", "course", "year"],
+                nulls_distinct=False,
+                name="uniq_batch_intake",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Batch {self.year} — {self.course.name if self.course_id else '?'}"
 
 
 class Section(TenantScopedModel):
@@ -120,6 +167,11 @@ class ClassInfo(TenantScopedModel):
     section = models.ForeignKey(Section, null=True, blank=True, on_delete=models.PROTECT)
     year = models.PositiveSmallIntegerField(null=True, blank=True)      # 1-4
     semester = models.PositiveSmallIntegerField(null=True, blank=True)  # 1-10
+    # Cohort dimension: lets the same course+term exist once per intake.
+    # NULL for school-level classes and pre-batch program rows.
+    batch = models.ForeignKey(
+        Batch, null=True, blank=True, on_delete=models.PROTECT, related_name="classes"
+    )
     display_name = models.CharField(max_length=100, blank=True, default="")
     academic_year = models.ForeignKey(
         AcademicYear, null=True, blank=True, on_delete=models.PROTECT, related_name="classes"
@@ -133,6 +185,7 @@ class ClassInfo(TenantScopedModel):
                 fields=[
                     "school", "education_level", "grade", "faculty",
                     "course", "section", "year", "semester", "academic_year",
+                    "batch",
                 ],
                 nulls_distinct=False,
                 name="uniq_class_tuple",
