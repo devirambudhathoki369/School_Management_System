@@ -81,7 +81,7 @@ class Migration(migrations.Migration):
             ],
             options={
                 'abstract': False,
-                'base_manager_name': '   ',
+                'base_manager_name': 'all_objects',
                 'default_manager_name': 'objects',
             },
             managers=[
@@ -96,6 +96,7 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True, db_index=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('is_active', models.BooleanField(default=True)),
+                ('file', models.FileField(upload_to='homework_submissions/%Y/%m/')),
                 ('submission', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='attachments', to='homework.submission')),
             ],
             options={
