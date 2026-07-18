@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
 import {
   EDUCATION_LEVELS,
+  useVisibleEducationLevels,
   FACULTIES,
   GRADES,
   choiceLabel,
@@ -154,6 +155,7 @@ function ClassModal({
   yearId: string
   onClose: () => void
 }) {
+  const visibleLevels = useVisibleEducationLevels()
   const toast = useToast()
   const queryClient = useQueryClient()
   const courses = useCourses()
@@ -220,7 +222,7 @@ function ClassModal({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Education level">
           <Select value={form.education_level} onChange={set('education_level')}>
-            {EDUCATION_LEVELS.map(([v, l]) => (
+            {visibleLevels.map(([v, l]) => (
               <option key={v} value={v}>
                 {l}
               </option>

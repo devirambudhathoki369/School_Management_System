@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Foundation, School, SchoolBranding, SchoolSettings, Shareholder
+from .models import Foundation, School, SchoolBranding, SchoolSettings, Shareholder, HiddenEducationLevel, VendorAnnouncement
 
 
 class SchoolSettingsInline(admin.StackedInline):
@@ -28,3 +28,15 @@ class FoundationAdmin(admin.ModelAdmin):
 
 
 admin.site.register(Shareholder)
+
+
+@admin.register(VendorAnnouncement)
+class VendorAnnouncementAdmin(admin.ModelAdmin):
+    list_display = ["__str__", "active", "created_at"]
+    list_filter = ["active"]
+
+
+@admin.register(HiddenEducationLevel)
+class HiddenEducationLevelAdmin(admin.ModelAdmin):
+    list_display = ["school", "education_level"]
+    list_filter = ["education_level", "school"]

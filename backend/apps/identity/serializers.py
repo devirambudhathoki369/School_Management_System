@@ -44,6 +44,13 @@ class AccountSerializer(serializers.ModelSerializer):
             "pan_no": school.pan_no,
             # House style for printed documents; CLASSIC when unset.
             "print_design": branding.print_design if branding else "classic",
+            # Vendor-hidden levels: pickers drop these (legacy
+            # SchoolHiddenEducationLevel). Empty = everything visible.
+            "hidden_education_levels": sorted(
+                school.hidden_education_levels.values_list(
+                    "education_level", flat=True
+                )
+            ),
         }
 
     def get_permissions(self, account) -> list[str]:

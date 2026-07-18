@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
 import {
   EDUCATION_LEVELS,
+  useVisibleEducationLevels,
   choiceLabel,
   useCourses,
   useSections,
@@ -102,6 +103,7 @@ function CoursesCard() {
 
 function CourseModal({ course, onClose }: { course: CourseRow | null; onClose: () => void }) {
   const toast = useToast()
+  const visibleLevels = useVisibleEducationLevels()
   const queryClient = useQueryClient()
   const [name, setName] = useState(course?.name ?? '')
   const [level, setLevel] = useState(course?.education_level ?? 'bachelor')
@@ -152,7 +154,7 @@ function CourseModal({ course, onClose }: { course: CourseRow | null; onClose: (
         </Field>
         <Field label="Education level">
           <Select value={level} onChange={(e) => setLevel(e.target.value)}>
-            {EDUCATION_LEVELS.map(([v, l]) => (
+            {visibleLevels.map(([v, l]) => (
               <option key={v} value={v}>
                 {l}
               </option>

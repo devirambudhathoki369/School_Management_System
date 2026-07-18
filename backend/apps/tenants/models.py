@@ -119,3 +119,38 @@ class SchoolBranding(BaseModel):
 
     def __str__(self):
         return f"Branding: {self.school}"
+
+
+class VendorAnnouncement(BaseModel):
+    """A vendor-authored splash shown to every school user at login (legacy
+    SplashNotice + the empty main_noticesa merged). Only active rows show;
+    the frontend renders the newest one as a dismissible popup."""
+
+    title = models.CharField(max_length=120, blank=True, default="")
+    message = models.TextField(blank=True, default="")
+    image = models.ImageField(upload_to="splash/%Y/", null=True, blank=True)
+    active = models.BooleanField(default=True, db_index=True)
+
+    def __str__(self):
+        return self.title or f"Announcement {self.id}"
+
+
+class HiddenEducationLevel(BaseModel):
+    """A (school, education level) the vendor has hidden — the school's UI
+    drops it from class/course pickers (legacy SchoolHiddenEducationLevel).
+    Presence = hidden; no rows = everything visible."""
+
+    school = models.ForeignKey(
+        School, on_delete=models.CASCADE, related_name="hidden_education_levels"
+    )
+    education_level = models.CharField(max_length=20)
+
+    class Meta(BaseModel.Meta):
+        constraints = [
+            models.UniqueConstraint(
+                fields=["school", "education_level"], name="uniq_hidden_level"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.school}: {self.education_level} hidden"

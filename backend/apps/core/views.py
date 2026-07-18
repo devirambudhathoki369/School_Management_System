@@ -46,3 +46,29 @@ class CalendarView(APIView):
         except (ValueError, TypeError):
             return Response({"error": {"message": "Invalid date."}}, status=400)
         return Response(payload)
+
+
+class SplashView(APIView):
+    """Newest active vendor announcement — every logged-in user sees it once
+    per dismissal (the client keys dismissals on the announcement id)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.tenants.models import VendorAnnouncement
+
+        row = (
+            VendorAnnouncement.objects.filter(active=True)
+            .order_by("-created_at")
+            .first()
+        )
+        if row is None:
+            return Response({"announcement": None})
+        return Response({
+            "announcement": {
+                "id": str(row.id),
+                "title": row.title,
+                "message": row.message,
+                "image": row.image.url if row.image else None,
+            }
+        })

@@ -26,3 +26,34 @@ def get_provider():
     if not path:
         return None
     return import_string(path)()
+
+
+# --------------------------------------------------------------- direct SMS
+
+class ConsoleSMSProvider:
+    """Default: logs instead of sending. Swapping in a real aggregator is a
+    settings change (SMS_PROVIDER dotted path), not a code change."""
+
+    def send_sms(self, numbers, message) -> int:
+        import logging
+
+        logging.getLogger("communication.sms").info(
+            "SMS -> %s: %s", ", ".join(numbers), message
+        )
+        return len(numbers)
+
+
+def get_sms_provider():
+    path = getattr(
+        settings, "SMS_PROVIDER", "apps.communication.providers.ConsoleSMSProvider"
+    )
+    return import_string(path)()
+
+
+def send_sms(numbers, message: str) -> int:
+    """Direct outbound SMS (daily collection, absent alerts, bulk sends).
+    Returns how many numbers were handed to the provider."""
+    numbers = [n.strip() for n in numbers if n and n.strip()]
+    if not numbers or not message:
+        return 0
+    return get_sms_provider().send_sms(numbers, message)

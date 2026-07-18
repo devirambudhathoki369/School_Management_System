@@ -28,6 +28,8 @@ export interface SchoolInfo {
   pan_no: string
   /** House style for printed documents (marksheets, certificates). */
   print_design: PrintDesign
+  /** Vendor-hidden levels — pickers drop these. Empty = all visible. */
+  hidden_education_levels: string[]
 }
 
 export interface Account {

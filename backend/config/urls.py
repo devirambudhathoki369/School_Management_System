@@ -7,7 +7,7 @@ from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from apps.core.reports import DashboardView
-from apps.core.views import CalendarView
+from apps.core.views import CalendarView, SplashView
 
 urlpatterns = [
     # Movable in production (DJANGO_ADMIN_PATH=<segment>/): the Django admin
@@ -16,6 +16,7 @@ urlpatterns = [
     path(getattr(settings, "ADMIN_PATH", "admin/"), admin.site.urls),
     path("health/", include("apps.core.urls")),
     path("api/v1/meta/calendar/", CalendarView.as_view(), name="meta-calendar"),
+    path("api/v1/meta/splash/", SplashView.as_view(), name="meta-splash"),
     path("api/v1/reports/dashboard/", DashboardView.as_view(), name="reports-dashboard"),
     path("api/v1/reports/", include("apps.reports.urls")),
     path("api/v1/auth/", include("apps.identity.urls")),

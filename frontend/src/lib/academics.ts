@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchAllPages } from './billing'
+import { useAuth } from './auth'
 
 /** Types + lookups for the academics workspace (years, classes, subjects). */
 
@@ -86,6 +87,13 @@ export const EDUCATION_LEVELS = [
   ['bachelor', 'Bachelor'],
   ['master', 'Master'],
 ] as const
+
+/** EDUCATION_LEVELS minus the vendor-hidden ones for this school. */
+export function useVisibleEducationLevels() {
+  const { account } = useAuth()
+  const hidden = new Set(account?.school?.hidden_education_levels ?? [])
+  return EDUCATION_LEVELS.filter(([value]) => !hidden.has(value))
+}
 
 export const GRADES = [
   ['play_group', 'Play group'],

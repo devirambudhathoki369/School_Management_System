@@ -2,6 +2,8 @@ import { useMemo, useState, type ComponentType } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useCalendar } from '../lib/billing'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '../lib/api'
 import { formatDateBS } from '../lib/format'
 import { ChangePasswordModal } from '../components/ChangePassword'
 import {
@@ -473,6 +475,49 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   )
 }
 
+/** Newest vendor announcement as a dismissible popup (once per id). */
+function SplashAnnouncement() {
+  const splash = useQuery({
+    queryKey: ['meta', 'splash'],
+    queryFn: async () =>
+      (
+        await api.get<{
+          announcement: { id: string; title: string; message: string; image: string | null } | null
+        }>('/api/v1/meta/splash/')
+      ).data.announcement,
+    staleTime: 60 * 60 * 1000,
+  })
+  const [dismissed, setDismissed] = useState(false)
+  const a = splash.data
+  if (!a || dismissed || localStorage.getItem(`splash-dismissed-${a.id}`)) return null
+  const close = () => {
+    localStorage.setItem(`splash-dismissed-${a.id}`, '1')
+    setDismissed(true)
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+      <button aria-label="Dismiss" className="absolute inset-0 bg-ink/40" onClick={close} />
+      <div className="relative w-full max-w-md animate-scale-in rounded-xl border border-border bg-surface p-5 shadow-xl">
+        {a.image && (
+          <img src={a.image} alt="" className="mb-3 max-h-56 w-full rounded-lg object-cover" />
+        )}
+        {a.title && <h2 className="text-base font-semibold">{a.title}</h2>}
+        {a.message && (
+          <p className="mt-1 whitespace-pre-wrap text-sm text-ink-muted">{a.message}</p>
+        )}
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={close}
+            className="press h-9 rounded-lg bg-accent-strong px-4 text-sm font-semibold text-white hover:bg-accent-deep"
+          >
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function AppShell() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const location = useLocation()
@@ -481,6 +526,7 @@ export default function AppShell() {
 
   return (
     <div className="flex h-full">
+      <SplashAnnouncement />
       <aside className="hidden w-[17rem] shrink-0 border-r border-sidebar-line bg-sidebar lg:block">
         <SidebarContent />
       </aside>
