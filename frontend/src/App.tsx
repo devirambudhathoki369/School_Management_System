@@ -34,6 +34,7 @@ import ReceiptsPage from './pages/billing/ReceiptsPage'
 import FeesPage from './pages/billing/FeesPage'
 import BatchesPage from './pages/billing/BatchesPage'
 import DiscountsPage from './pages/billing/DiscountsPage'
+import OldDuesPage from './pages/billing/OldDuesPage'
 import AccountingLayout from './pages/accounting/AccountingLayout'
 import VouchersPage from './pages/accounting/VouchersPage'
 import NewVoucherPage from './pages/accounting/NewVoucherPage'
@@ -210,6 +211,7 @@ export default function App() {
             <Route path="fees" element={<FeesPage />} />
             <Route path="batches" element={<BatchesPage />} />
             <Route path="discounts" element={<DiscountsPage />} />
+            <Route path="old-dues" element={<OldDuesPage />} />
           </Route>
           <Route path="/accounting" element={<AccountingLayout />}>
             <Route index element={<Navigate to="vouchers" replace />} />

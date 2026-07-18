@@ -132,6 +132,7 @@ const NAV: Section[] = [
           { label: 'Fee plan', to: '/billing/fees' },
           { label: 'Billing runs', to: '/billing/batches' },
           { label: 'Discounts', to: '/billing/discounts' },
+          { label: 'Old dues posting', to: '/billing/old-dues' },
         ],
       },
       {

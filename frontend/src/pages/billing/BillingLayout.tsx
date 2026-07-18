@@ -12,6 +12,7 @@ const TABS = [
   { to: '/billing/fees', label: 'Fee plan' },
   { to: '/billing/batches', label: 'Billing runs' },
   { to: '/billing/discounts', label: 'Discounts' },
+  { to: '/billing/old-dues', label: 'Old dues' },
 ]
 
 export default function BillingLayout() {

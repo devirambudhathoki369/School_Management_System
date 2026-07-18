@@ -1,6 +1,6 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import MethodNotAllowed, PermissionDenied, ValidationError
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -115,7 +115,12 @@ class ChargeViewSet(TenantScopedViewSet):
     serializer_class = ChargeSerializer
     allowed_roles = MANAGERS
     permission_code = "billing"
-    http_method_names = ["get", "head", "options"]  # written via batches/year-end only
+    http_method_names = ["get", "post", "head", "options"]  # POST = old-dues action only
+
+    def create(self, request, *args, **kwargs):
+        # Ad-hoc charges stay closed; batches/year-end and the old-dues
+        # action below are the only writers.
+        raise MethodNotAllowed("POST")
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -125,6 +130,75 @@ class ChargeViewSet(TenantScopedViewSet):
         if self.action == "retrieve":
             qs = qs.prefetch_related("lines")
         return qs.order_by("-date_bs")
+
+    @extend_schema(summary="Post pre-system OLD DUES balances for many students")
+    @action(detail=False, methods=["post"], url_path="post-old-dues")
+    def post_old_dues(self, request):
+        """Legacy old-dues posting: one OLD_DUES charge per student for
+        balances carried from before the system. Zero/blank amounts skip."""
+        from decimal import Decimal, InvalidOperation
+
+        from apps.people.models import Student
+
+        from .models import BillingYear, ChargeLine, LineType
+        from apps.academics.models import AcademicYear
+
+        year = AcademicYear.objects.filter(
+            school=request.school, id=request.data.get("academic_year")
+        ).first()
+        billing_year = BillingYear.objects.filter(
+            id=request.data.get("billing_year")
+        ).first()
+        date_bs = (request.data.get("date_bs") or "").strip()
+        entries = request.data.get("entries")
+        if year is None:
+            raise ValidationError({"academic_year": "Unknown academic year."})
+        if billing_year is None:
+            raise ValidationError({"billing_year": "Unknown billing year."})
+        if not date_bs:
+            raise ValidationError({"date_bs": "Required."})
+        if not isinstance(entries, list) or not entries:
+            raise ValidationError({"entries": "Provide student/amount rows."})
+
+        cleaned = []
+        for i, entry in enumerate(entries):
+            try:
+                amount = Decimal(str(entry.get("amount") or "0"))
+            except (InvalidOperation, TypeError):
+                raise ValidationError({"entries": f"Row {i + 1}: bad amount."})
+            if amount == 0:
+                continue
+            if amount < 0:
+                raise ValidationError({"entries": f"Row {i + 1}: negative amount."})
+            cleaned.append((entry.get("student"), amount, entry.get("remarks") or ""))
+        if not cleaned:
+            return Response({"posted": 0})
+
+        students = {
+            str(s.id): s
+            for s in Student.objects.filter(
+                school=request.school, id__in=[c[0] for c in cleaned]
+            )
+        }
+        if len(students) != len({c[0] for c in cleaned}):
+            raise ValidationError({"entries": "Unknown student in the list."})
+
+        from django.db import transaction
+
+        with transaction.atomic():
+            posted = 0
+            for student_id, amount, remarks in cleaned:
+                charge = Charge.objects.create(
+                    school=request.school, student=students[student_id],
+                    date_bs=date_bs, academic_year=year, billing_year=billing_year,
+                    total=amount, remarks=remarks or "Old dues",
+                )
+                ChargeLine.objects.create(
+                    charge=charge, line_type=LineType.OLD_DUES,
+                    label="Old dues", amount=amount,
+                )
+                posted += 1
+        return Response({"posted": posted}, status=201)
 
 
 class PaymentViewSet(TenantScopedViewSet):
