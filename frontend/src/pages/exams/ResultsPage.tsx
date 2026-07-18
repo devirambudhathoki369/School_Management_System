@@ -162,7 +162,7 @@ export default function ResultsPage() {
 }
 
 /** Letterhead wrapper for anything printed from this page. */
-function PrintFrame({ children }: { children: React.ReactNode }) {
+export function PrintFrame({ children }: { children: React.ReactNode }) {
   const { account } = useAuth()
   const school = account?.school
   return (
@@ -187,7 +187,7 @@ function num(value: string | null): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2)
 }
 
-function ClassResultTable({
+export function ClassResultTable({
   data,
   onStudent,
 }: {

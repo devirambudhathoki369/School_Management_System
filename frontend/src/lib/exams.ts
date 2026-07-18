@@ -168,6 +168,8 @@ export interface ClassResultMark {
   absent: boolean
   letter: string
   grade_point: string
+  /** Final results only: per-exam totals (exam id → total) for combined columns. */
+  breakdown?: Record<string, string>
 }
 
 export interface ClassResultStudent {
@@ -210,6 +212,25 @@ export function useClassResult(examId: string | null, classId: string | null) {
         )
       ).data,
     enabled: !!examId && !!classId,
+  })
+}
+
+export interface FinalClassResult extends ClassResult {
+  included_exams: Array<{ id: string; name: string; weight: string }>
+}
+
+/** Annual aggregate over every exam of the year carrying an inclusion weight. */
+export function useFinalClassResult(yearId: string | null, classId: string | null) {
+  return useQuery({
+    queryKey: ['exams', 'final-result', yearId, classId],
+    queryFn: async () =>
+      (
+        await api.get<FinalClassResult>('/api/v1/examinations/exams/final-result/', {
+          params: { academic_year: yearId, class_info: classId },
+        })
+      ).data,
+    enabled: !!yearId && !!classId,
+    retry: false,
   })
 }
 

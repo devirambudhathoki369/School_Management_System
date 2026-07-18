@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
-from apps.academics.models import ClassInfo
+from apps.academics.models import AcademicYear, ClassInfo
 from apps.core.viewsets import TenantScopedViewSet
 from apps.identity.models import Role
 
@@ -32,6 +32,7 @@ from .serializers import (
     SubjectResultSheetSerializer,
 )
 from .services import grading, positions, seating
+from .services.final_result import final_class_result
 
 MANAGERS = (Role.ADMIN, Role.STAFF)
 
@@ -156,6 +157,22 @@ class ExamViewSet(TenantScopedViewSet):
                 "students": payload,
             }
         )
+
+    @extend_schema(summary="Final (annual) result aggregated over weighted exams")
+    @action(detail=False, methods=["get"], url_path="final-result")
+    def final_result(self, request):
+        """Same contract as class-result, aggregated across every exam of the
+        year that carries an inclusion weight — powers the final class grid,
+        final marksheets and the combined (per-exam columns) view."""
+        year = get_object_or_404(
+            AcademicYear,
+            id=request.query_params.get("academic_year"),
+            school=request.school,
+        )
+        class_info = get_object_or_404(
+            ClassInfo, id=request.query_params.get("class_info"), school=request.school
+        )
+        return Response(final_class_result(request.school, year, class_info))
 
     @extend_schema(summary="Class roster with identities (entry cards / seating)")
     @action(detail=False, methods=["get"], url_path="class-roster")
