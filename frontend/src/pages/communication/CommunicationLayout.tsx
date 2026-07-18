@@ -9,6 +9,7 @@ export default function CommunicationLayout() {
         { to: '/communication/news', label: 'News & events' },
         { to: '/communication/calendar', label: 'Calendar' },
         { to: '/communication/templates', label: 'Templates' },
+        { to: '/communication/sms', label: 'Send SMS' },
         { to: '/communication/deliveries', label: 'Delivery log' },
       ]}
     />

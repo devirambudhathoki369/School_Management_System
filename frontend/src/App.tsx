@@ -18,6 +18,7 @@ import CommunicationLayout from './pages/communication/CommunicationLayout'
 import NoticesPage from './pages/communication/NoticesPage'
 import CalendarPage from './pages/communication/CalendarPage'
 import TemplatesPage from './pages/communication/TemplatesPage'
+import SendSMSPage from './pages/communication/SendSMSPage'
 import DeliveriesPage from './pages/communication/DeliveriesPage'
 import LibraryLayout from './pages/library/LibraryLayout'
 import BooksPage from './pages/library/BooksPage'
@@ -188,6 +189,7 @@ export default function App() {
             <Route path="news" element={<NewsPage />} />
             <Route path="calendar" element={<CalendarPage />} />
             <Route path="templates" element={<TemplatesPage />} />
+            <Route path="sms" element={<SendSMSPage />} />
             <Route path="deliveries" element={<DeliveriesPage />} />
           </Route>
           <Route path="/library" element={<LibraryLayout />}>

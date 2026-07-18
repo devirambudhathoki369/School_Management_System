@@ -108,3 +108,19 @@ class DeliveryLog(TenantScopedModel):
 
     def __str__(self):
         return f"{self.title} -> {self.recipient or self.legacy_recipient_id}"
+
+
+class SlideImage(TenantScopedModel):
+    """App slideshow images (legacy slide-show-images): what the parent app
+    rotates on its home screen. Ordered; only active rows serve."""
+
+    image = models.ImageField(upload_to="slides/%Y/")
+    caption = models.CharField(max_length=120, blank=True, default="")
+    order = models.PositiveSmallIntegerField(default=0)
+    active = models.BooleanField(default=True)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ("order", "created_at")
+
+    def __str__(self):
+        return self.caption or f"Slide {self.order}"

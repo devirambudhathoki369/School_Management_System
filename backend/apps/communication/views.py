@@ -66,3 +66,18 @@ class DeliveryLogViewSet(TenantScopedViewSet):
             if value:
                 qs = qs.filter(**{param: value})
         return qs.order_by("-sent_at")
+
+
+class SlideImageViewSet(TenantScopedViewSet):
+    """App slideshow images — the parent app rotates the active set."""
+
+    from .models import SlideImage as _SlideImage
+
+    queryset = _SlideImage.objects.all()
+    allowed_roles = MANAGERS
+    permission_code = "communication"
+
+    def get_serializer_class(self):
+        from .serializers import SlideImageSerializer
+
+        return SlideImageSerializer

@@ -45,3 +45,12 @@ class DeliveryLogSerializer(serializers.ModelSerializer):
         model = DeliveryLog
         fields = ["id", "recipient", "title", "body", "data", "status", "sent_at"]
         read_only_fields = fields  # written by senders/importers, never by clients
+
+
+class SlideImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        from .models import SlideImage
+
+        model = SlideImage
+        fields = ["id", "image", "caption", "order", "active"]
+        read_only_fields = ["id"]

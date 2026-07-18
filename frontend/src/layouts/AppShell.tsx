@@ -201,6 +201,7 @@ const NAV: Section[] = [
           { label: 'News & events', to: '/communication/news' },
           { label: 'Academic calendar', to: '/communication/calendar' },
           { label: 'Message templates', to: '/communication/templates' },
+          { label: 'Send SMS', to: '/communication/sms' },
           { label: 'Deliveries', to: '/communication/deliveries' },
         ],
       },

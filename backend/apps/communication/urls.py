@@ -15,4 +15,16 @@ router.register("calendar", CalendarEventViewSet, basename="calendar-event")
 router.register("templates", MessageTemplateViewSet, basename="message-template")
 router.register("delivery-log", DeliveryLogViewSet, basename="delivery-log")
 
-urlpatterns = router.urls
+from .views import SlideImageViewSet  # noqa: E402
+
+router.register("slides", SlideImageViewSet, basename="slide-image")
+
+from django.urls import path
+
+from .sms_views import DuesReminderSMSView, SendSMSView
+
+urlpatterns = [
+    path("sms/send/", SendSMSView.as_view(), name="sms-send"),
+    path("sms/dues-reminder/", DuesReminderSMSView.as_view(), name="sms-dues-reminder"),
+    *router.urls,
+]
