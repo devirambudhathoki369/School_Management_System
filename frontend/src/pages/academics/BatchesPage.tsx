@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
 import {
+  EDUCATION_LEVELS,
   choiceLabel,
   useAcademicYearsFull,
   useBatches,
@@ -102,7 +103,7 @@ export default function BatchesPage() {
                       {b.course_name || '—'}
                       {b.education_level && (
                         <span className="ml-1.5 text-xs text-ink-muted">
-                          {choiceLabel(b.education_level)}
+                          {choiceLabel(EDUCATION_LEVELS, b.education_level)}
                         </span>
                       )}
                     </td>
@@ -123,12 +124,11 @@ export default function BatchesPage() {
                     </td>
                     <td className="px-3 py-2.5">
                       <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => setEditing(b)}>
+                        <Button variant="ghost" onClick={() => setEditing(b)}>
                           <IconPencil size={15} />
                         </Button>
                         <Button
                           variant="ghost"
-                          size="sm"
                           onClick={() => {
                             if (window.confirm(`Delete batch ${b.year}?`)) remove.mutate(b.id)
                           }}
@@ -216,7 +216,7 @@ function BatchModal({ batch, onClose }: { batch: BatchRow | null; onClose: () =>
             <option value="">Choose a program…</option>
             {programCourses.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name} · {choiceLabel(c.education_level)}
+                {c.name} · {choiceLabel(EDUCATION_LEVELS, c.education_level)}
               </option>
             ))}
           </Select>

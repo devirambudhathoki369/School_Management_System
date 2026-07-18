@@ -7,7 +7,7 @@ from rest_framework.test import APIClient
 
 from apps.billing.models import BillingYear, Charge, FeeTitle, Payment
 from apps.examinations.models import CharacterCertificate, SeatAllocation, SeatPlanRoom
-from apps.examinations.services import certificates, seating
+from apps.examinations.services import certificates
 from apps.people.models import Student
 from apps.people.tests.test_module_permissions import make_staff
 from apps.people.tests.test_tenant_isolation import login, make_school

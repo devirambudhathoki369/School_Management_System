@@ -122,7 +122,7 @@ class DuesReminderSMSView(BaseSMSView):
         try:
             min_dues = Decimal(str(request.data.get("min_dues") or "1"))
         except ArithmeticError:
-            raise ValidationError({"min_dues": "Enter a number."})
+            raise ValidationError({"min_dues": "Enter a number."}) from None
         template = (request.data.get("template") or self.DEFAULT_TEMPLATE).strip()
         students = Student.objects.filter(
             school=school, status=Student.Status.RUNNING

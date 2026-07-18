@@ -1147,7 +1147,7 @@ class Command(BaseCommand):
 
         if not PunchLog.objects.exists():
             punch_rows = []
-            for lid, punch_time, status, verify, workcode, received, user_lid in self._rows(
+            for lid, punch_time, status, verify, workcode, _received, user_lid in self._rows(
                 legacy,
                 "SELECT id, punch_time, status, verify, workcode, received_at,"
                 " user_id FROM rfid_rfidattdlogs ORDER BY id",

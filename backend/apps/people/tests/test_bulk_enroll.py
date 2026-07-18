@@ -45,7 +45,7 @@ class TestBulkEnroll:
         assert Student.objects.filter(school=school).count() == 1  # nothing landed
 
     def test_foreign_class_refused(self, db):
-        school_a = make_school("bulka")
+        make_school("bulka")
         school_b = make_school("bulkb")
         other = make_student(school_b, "Other")
         api = APIClient()

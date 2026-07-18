@@ -30,8 +30,8 @@ from .serializers import (
     PaymentSerializer,
     StandingDiscountSerializer,
 )
-from .services.dues import student_dues
 from .services import education_fee
+from .services.dues import student_dues
 
 MANAGERS = (Role.ADMIN, Role.STAFF)
 
@@ -138,10 +138,10 @@ class ChargeViewSet(TenantScopedViewSet):
         balances carried from before the system. Zero/blank amounts skip."""
         from decimal import Decimal, InvalidOperation
 
+        from apps.academics.models import AcademicYear
         from apps.people.models import Student
 
         from .models import BillingYear, ChargeLine, LineType
-        from apps.academics.models import AcademicYear
 
         year = AcademicYear.objects.filter(
             school=request.school, id=request.data.get("academic_year")
@@ -165,7 +165,9 @@ class ChargeViewSet(TenantScopedViewSet):
             try:
                 amount = Decimal(str(entry.get("amount") or "0"))
             except (InvalidOperation, TypeError):
-                raise ValidationError({"entries": f"Row {i + 1}: bad amount."})
+                raise ValidationError(
+                    {"entries": f"Row {i + 1}: bad amount."}
+                ) from None
             if amount == 0:
                 continue
             if amount < 0:

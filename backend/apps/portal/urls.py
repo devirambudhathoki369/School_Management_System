@@ -4,8 +4,8 @@ from .views import (
     ChildAttendanceView,
     ChildFeesView,
     ChildHomeworkView,
-    ChildResultsView,
     ChildrenView,
+    ChildResultsView,
     NoticesView,
     PortalCalendarView,
 )

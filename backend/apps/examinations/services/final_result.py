@@ -24,8 +24,8 @@ from decimal import Decimal
 
 from rest_framework.exceptions import ValidationError
 
-from . import grading
 from ..models import Exam, SubjectResultSheet
+from . import grading
 
 ZERO = Decimal("0")
 HUNDRED = Decimal("100")

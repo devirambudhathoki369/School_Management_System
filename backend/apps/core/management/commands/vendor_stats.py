@@ -7,7 +7,7 @@ students, staff, today's collection and total outstanding dues.
 from decimal import Decimal
 
 from django.core.management.base import BaseCommand
-from django.db.models import Count, Q, Sum
+from django.db.models import Sum
 
 from apps.billing.models import Charge, Payment
 from apps.core.dates import today_bs

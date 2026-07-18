@@ -34,7 +34,8 @@ class Command(BaseCommand):
         for flag, key in (("-h", "HOST"), ("-p", "PORT"), ("-U", "USER")):
             if db.get(key):
                 cmd += [flag, str(db[key])]
-        result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+        # S603: argv comes from Django settings, not request input.
+        result = subprocess.run(cmd, env=env, capture_output=True, text=True)  # noqa: S603
         if result.returncode != 0:
             raise CommandError(f"pg_dump failed: {result.stderr.strip()}")
         size = os.path.getsize(target)

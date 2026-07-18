@@ -6,7 +6,7 @@ from rest_framework.test import APIClient
 
 from apps.audit.models import AuditEvent
 from apps.identity import lockout
-from apps.identity.models import Account, Role
+from apps.identity.models import Account
 from apps.people.tests.test_tenant_isolation import PASSWORD, login, make_school
 
 

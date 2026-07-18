@@ -29,7 +29,7 @@ from .models import Guardian
 USERNAME_MAX = 25
 # Unambiguous alphabet (no 0/O, 1/l/I) — these get read out loud and typed
 # from a paper slip.
-TEMP_PASSWORD_ALPHABET = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789"
+TEMP_PASSWORD_ALPHABET = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789"  # noqa: S105 — an alphabet, not a secret
 
 
 def _generate_temp_password() -> str:

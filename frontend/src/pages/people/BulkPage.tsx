@@ -6,7 +6,6 @@ import ClassPicker from '../../components/ClassPicker'
 import {
   Button,
   EmptyState,
-  Field,
   Input,
   Select,
   SkeletonRows,
@@ -104,7 +103,7 @@ function EnrollGrid({ classId }: { classId: string }) {
       (
         await api.post<{ enrolled: number }>('/api/v1/people/students/bulk-enroll/', {
           class_info: classId,
-          rows: filled.map(({ key, ...rest }) => rest),
+          rows: filled.map(({ key: _key, ...rest }) => rest),
         })
       ).data,
     onSuccess: (res) => {

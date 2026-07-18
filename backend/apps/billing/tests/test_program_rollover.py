@@ -6,7 +6,12 @@ import pytest
 
 from apps.academics.models import AcademicYear, ClassInfo, Course
 from apps.billing.models import (
-    BillingYear, Charge, ChargeBatch, ChargeLine, FeeTitle, LineType, Payment,
+    BillingYear,
+    Charge,
+    ChargeLine,
+    FeeTitle,
+    LineType,
+    Payment,
     PaymentLine,
 )
 from apps.billing.services.year_end import rollover_program_year

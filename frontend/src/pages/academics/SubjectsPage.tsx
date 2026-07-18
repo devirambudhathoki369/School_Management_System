@@ -196,10 +196,10 @@ function AssignStudentsModal({
         Ticking nobody keeps the whole class eligible.
       </p>
       <div className="mb-2 flex gap-2">
-        <Button variant="ghost" size="sm" onClick={() => setPicked(new Set(rows.map((r) => r.id)))}>
+        <Button variant="ghost" onClick={() => setPicked(new Set(rows.map((r) => r.id)))}>
           Select all
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())}>
+        <Button variant="ghost" onClick={() => setPicked(new Set())}>
           Clear
         </Button>
         <span className="ml-auto self-center text-xs text-ink-muted">

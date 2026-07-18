@@ -29,7 +29,10 @@ from .base import ROW_CAP, ReportView
 
 def _primary_guardian(student):
     links = list(student.guardian_links.all())
-    primary = next((l for l in links if l.is_primary_contact), links[0] if links else None)
+    primary = next(
+        (link for link in links if link.is_primary_contact),
+        links[0] if links else None,
+    )
     return primary.guardian if primary else None
 
 
@@ -211,7 +214,7 @@ class HomeworkGivenReportView(ReportView):
         try:
             day_start, day_end = bs_day_utc_range(date_bs)
         except Exception:
-            raise ValidationError({"date_bs": "Not a valid BS date."})
+            raise ValidationError({"date_bs": "Not a valid BS date."}) from None
 
         rows = [
             {

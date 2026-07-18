@@ -49,7 +49,9 @@ class TestDeliveryDispatch:
         stale = queue(school, "stale")
         SENT.clear()
         assert dispatch_queued_deliveries() == 3
-        ok.refresh_from_db(); bad.refresh_from_db(); stale.refresh_from_db()
+        ok.refresh_from_db()
+        bad.refresh_from_db()
+        stale.refresh_from_db()
         assert ok.status == DeliveryLog.Status.SENT
         assert bad.status == DeliveryLog.Status.FAILED
         assert stale.status == DeliveryLog.Status.STALE_TOKEN
@@ -65,7 +67,8 @@ class TestDeliveryDispatch:
             created_at=timezone.now() - timedelta(days=45)
         )
         assert expire_stale_deliveries(days=30) == 1
-        old.refresh_from_db(); fresh.refresh_from_db()
+        old.refresh_from_db()
+        fresh.refresh_from_db()
         assert old.status == DeliveryLog.Status.FAILED
         assert fresh.status == DeliveryLog.Status.QUEUED
 

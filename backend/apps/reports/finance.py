@@ -23,7 +23,16 @@ from collections import defaultdict
 from decimal import Decimal
 
 from django.db.models import (
-    Count, DecimalField, F, Max, Min, OuterRef, Prefetch, Q, Subquery, Sum,
+    Count,
+    DecimalField,
+    F,
+    Max,
+    Min,
+    OuterRef,
+    Prefetch,
+    Q,
+    Subquery,
+    Sum,
 )
 from django.db.models.functions import Coalesce
 from rest_framework.exceptions import ValidationError
@@ -393,7 +402,7 @@ class StudentLedgersReportView(ReportView):
             try:
                 return Decimal(raw)
             except ArithmeticError:
-                raise ValidationError({name: "Enter a number."})
+                raise ValidationError({name: "Enter a number."}) from None
 
         balance_gt, balance_lt = bound("balance_gt"), bound("balance_lt")
 
@@ -438,7 +447,10 @@ class StudentLedgersReportView(ReportView):
         rows = []
         for s in students[:ROW_CAP]:
             links = list(s.guardian_links.all())
-            primary = next((l for l in links if l.is_primary_contact), links[0] if links else None)
+            primary = next(
+                (link for link in links if link.is_primary_contact),
+                links[0] if links else None,
+            )
             guardian = primary.guardian if primary else None
             rows.append({
                 "student_id": str(s.id),
@@ -493,7 +505,9 @@ class IncomePlanReportView(ReportView):
         try:
             sel_months = {int(m) for m in months_raw}
         except ValueError:
-            raise ValidationError({"months": "Months must be integers 1-12."})
+            raise ValidationError(
+                {"months": "Months must be integers 1-12."}
+            ) from None
         if not sel_months or not sel_months.issubset(set(range(1, 13))):
             raise ValidationError({"months": "Pick at least one month (1-12)."})
         education_level = request.query_params.get("education_level")

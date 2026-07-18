@@ -1,16 +1,16 @@
 from django.urls import path
 
-from .demographics import (
-    ClassStatisticsReportView,
-    StaffBirthdaysView,
-    StudentBirthdaysView,
-)
 from .campus import (
     AdmissionsReportView,
     AttendanceSummaryReportView,
     HomeworkGivenReportView,
     StaffDetailsReportView,
     TransportHistoryReportView,
+)
+from .demographics import (
+    ClassStatisticsReportView,
+    StaffBirthdaysView,
+    StudentBirthdaysView,
 )
 from .finance import (
     DuesReportView,

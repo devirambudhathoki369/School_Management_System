@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import Foundation, School, SchoolBranding, SchoolSettings, Shareholder, HiddenEducationLevel, VendorAnnouncement
+from .models import (
+    Foundation,
+    HiddenEducationLevel,
+    School,
+    SchoolBranding,
+    SchoolSettings,
+    Shareholder,
+    VendorAnnouncement,
+)
 
 
 class SchoolSettingsInline(admin.StackedInline):

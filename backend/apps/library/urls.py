@@ -3,7 +3,6 @@ from django.urls import path
 from apps.core.routers import ApiRouter
 
 from .reports import LibraryReportView
-
 from .views import BookCopyViewSet, BookViewSet, LibraryViewSet, LoanViewSet
 
 router = ApiRouter()

@@ -11,7 +11,7 @@ from rest_framework.test import APIClient
 from apps.academics.models import AcademicYear, Batch, ClassInfo, Course, Section
 from apps.academics.services import promote_program
 from apps.people.models import Student
-from apps.people.tests.test_tenant_isolation import login, make_school, make_student
+from apps.people.tests.test_tenant_isolation import login, make_school
 
 
 @pytest.fixture
@@ -127,7 +127,8 @@ class TestProgramPromotion:
 
         result = promote_program(school, course, apply=True)
         assert result["applied"] is True
-        s1.refresh_from_db(); s2.refresh_from_db()
+        s1.refresh_from_db()
+        s2.refresh_from_db()
         assert s1.class_info_id == sem2.id
         assert s2.class_info.semester == 3
         batch.refresh_from_db()

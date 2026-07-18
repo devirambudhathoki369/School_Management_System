@@ -250,7 +250,7 @@ class TestReports:
         assert pl["total_income"] == Decimal("4500.00")  # 5000 - 500 refund
         assert pl["total_expense"] == Decimal("2000.00")
         assert pl["net"] == Decimal("2500.00")
-        income_rows = [l for g in pl["income"] for l in g["ledgers"]]
+        income_rows = [row for g in pl["income"] for row in g["ledgers"]]
         assert income_rows == [
             {"id": str(tuition.id), "ledger": "Tuition income", "amount": Decimal("4500.00")}
         ]

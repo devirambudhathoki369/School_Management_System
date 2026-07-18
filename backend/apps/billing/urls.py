@@ -1,4 +1,5 @@
 from django.urls import path
+
 from apps.core.routers import ApiRouter
 
 from .views import (

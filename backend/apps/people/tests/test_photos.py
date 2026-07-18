@@ -136,10 +136,9 @@ class TestHomeworkIntake:
     def test_attachment_extension_comes_from_content(self, tmp_path, settings):
         settings.MEDIA_ROOT = tmp_path
         from apps.academics.models import AcademicYear, ClassInfo
-        from apps.people.models import StaffRole
 
         school = make_school("hwup")
-        staff = make_staff(school, "hw_teacher", ["homework.manage"])
+        make_staff(school, "hw_teacher", ["homework.manage"])
         year = AcademicYear.objects.get_or_create(
             school=school, name="2082",
             defaults={"start_date_bs": "2082-01-01", "end_date_bs": "2082-12-30"},

@@ -226,7 +226,7 @@ class ExamViewSet(TenantScopedViewSet):
             for student_id, paid, discount in paid_rows:
                 # M1: total_paid is pre-discount; the discount settles debt too.
                 settled[student_id] = (paid or Decimal("0")) + (discount or Decimal("0"))
-            for student, row in zip(students, rows):
+            for student, row in zip(students, rows, strict=False):
                 dues = (charged.get(student.id) or Decimal("0")) - settled.get(
                     student.id, Decimal("0")
                 )

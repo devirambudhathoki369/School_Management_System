@@ -145,7 +145,6 @@ function PoolCard({ photo }: { photo: PendingPhoto }) {
         <div className="flex gap-2">
           <Button
             className="flex-1"
-            size="sm"
             busy={pair.isPending}
             disabled={!student}
             onClick={() => pair.mutate()}
@@ -154,7 +153,6 @@ function PoolCard({ photo }: { photo: PendingPhoto }) {
           </Button>
           <Button
             variant="ghost"
-            size="sm"
             aria-label="Discard photo"
             onClick={() => {
               if (window.confirm('Discard this photo?')) discard.mutate()

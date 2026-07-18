@@ -1,5 +1,6 @@
 from django.contrib.auth import authenticate, password_validation
 from rest_framework import serializers
+
 # DRF's exception, NOT simplejwt's: the simplejwt variant wraps detail in a
 # dict, which breaks the view's get_codes() dispatch for this code.
 from rest_framework.exceptions import AuthenticationFailed

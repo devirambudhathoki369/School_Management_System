@@ -8,7 +8,7 @@ from decimal import Decimal
 import pytest
 from rest_framework.test import APIClient
 
-from apps.academics.models import AcademicYear, ClassInfo, Section
+from apps.academics.models import AcademicYear, ClassInfo
 from apps.billing.models import (
     BillingYear,
     Charge,
@@ -23,7 +23,7 @@ from apps.billing.models import (
 )
 from apps.core.dates import today_bs
 from apps.homework.models import Homework
-from apps.people.models import Guardian, Student, StudentGuardian
+from apps.people.models import Guardian, StudentGuardian
 from apps.people.tests.test_module_permissions import make_staff
 from apps.people.tests.test_tenant_isolation import login, make_school, make_student
 from apps.transport.models import BusStation, RiderSubscription
@@ -104,7 +104,7 @@ class TestGates:
 
     def test_tenant_isolation(self, report_world):
         other = make_school("repb")
-        student_b = make_student(other, "Bina")
+        make_student(other, "Bina")
         api = APIClient()
         login(api, "admin_repb", "admin")
         res = api.get("/api/v1/reports/transactions/")
@@ -114,7 +114,7 @@ class TestGates:
     def test_guardian_refused(self, report_world):
         school, student, *_ = report_world
         api = as_admin()
-        res = api.post(f"/api/v1/people/guardians/", {"name": "Gita"}, format="json")
+        api.post("/api/v1/people/guardians/", {"name": "Gita"}, format="json")
         # Guardian portal principals are cut off by RoleAllowed regardless.
         anon = APIClient()
         assert anon.get("/api/v1/reports/transactions/").status_code == 401

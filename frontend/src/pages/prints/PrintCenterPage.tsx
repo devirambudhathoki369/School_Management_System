@@ -324,7 +324,6 @@ function MarksSlips({ classId }: { classId: string }) {
   const roster = useExamClassRoster(classId)
   const subjects = sheets.data ?? []
   const rows = roster.data ?? []
-  const { account } = useAuth()
 
   const slip = (
     <div className="bg-white p-6 text-[12px] text-black">
