@@ -136,6 +136,7 @@ export interface StudentRow {
   class_info: string | null
   class_label: string
   contact: string
+  photo: string | null
 }
 
 /** Detail serializer shape (no computed full_name/class_label here). */

@@ -250,6 +250,7 @@ const NAV: Section[] = [
           { label: 'Opening balances', to: '/reports/opening-balances', needs: ['billing.view', 'billing.manage'] },
           { label: 'Admissions', to: '/reports/admissions', needs: ['students.view', 'students.manage'] },
           { label: 'Staff details', to: '/reports/staff', needs: ['staff.view', 'staff.manage'] },
+          { label: 'Print center', to: '/prints', needs: ['students.view', 'students.manage'] },
           { label: 'Transport', to: '/reports/transport', needs: ['transport.view', 'transport.manage'] },
           { label: 'Homework', to: '/reports/homework', needs: ['homework.view', 'homework.manage'] },
           { label: 'Attendance', to: '/reports/attendance', needs: ['attendance.view', 'attendance.manage'] },

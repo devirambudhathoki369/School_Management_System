@@ -48,6 +48,7 @@ import RegistryPage from './pages/devices/RegistryPage'
 import DeviceUsersPage from './pages/devices/DeviceUsersPage'
 import PunchLogPage from './pages/devices/PunchLogPage'
 import AuditLogPage from './pages/audit/AuditLogPage'
+import PrintCenterPage from './pages/prints/PrintCenterPage'
 import ResultsPage from './pages/exams/ResultsPage'
 import FinalResultsPage from './pages/exams/FinalResultsPage'
 import ActivitiesPage from './pages/exams/ActivitiesPage'
@@ -235,6 +236,7 @@ export default function App() {
             <Route path="users" element={<DeviceUsersPage />} />
             <Route path="punches" element={<PunchLogPage />} />
           </Route>
+          <Route path="/prints" element={<PrintCenterPage />} />
           <Route path="/audit" element={<AuditLogPage />} />
           <Route path="/reports" element={<ReportsLayout />}>
             <Route index element={<ReportsIndex />} />
