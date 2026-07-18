@@ -907,6 +907,48 @@ PostgreSQL must be running; backend env `smsys.backend/.env`, frontend `smsys/.e
 `backfill_promotion_dues`, `check_ay_alignment`, `pushtest`, `noticepushtest`,
 `subscribetopics` (main).
 
+## 21. Post-audit parity additions (2026-07, rebuild)
+
+Modules the legacy system grew after this spec was frozen, ported with their
+rules intact; invariants continue the §19 numbering.
+
+- **Education Equality Fee (शिक्षा समता शुल्क)** — Nepal FY 2083/84's 3% levy.
+  - **T1**: the fee is a government PASS-THROUGH — snapshotted on the payment
+    (`edu_fee_pct/base/amount`), never inside `total_paid`, dues, or revenue.
+  - **T2**: opt-IN per (school, education level), vendor-managed
+    (`billing.EducationFeeLevel`); no rows = off. Regular receipts only.
+  - **T3**: base = Σ(amount − discount) over positive-net lines, the DISCOUNT
+    pseudo-line excluded (its amounts already netted per line); old dues,
+    opening balances, transport and fines ARE taxable; 3% ROUND_HALF_UP.
+  - Receipts print the levy + grand total; the daily-collection SMS appends
+    "Equity Fee Payable" only for enabled schools.
+- **Batches (cohorts)** — the intake is a student's immutable identity
+  (`academics.Batch`, unique per school+course+admission year); the class
+  tuple gains the batch dimension so two intakes can share a course+term.
+  Exactly one of `current_semester`/`current_year` advances, and only via
+  promotion. `Course.total_years`/`total_semesters` are mutually exclusive.
+- **Program year-end (shared-clock programs)** — order is LAW:
+  1. `rollover_program_year` closes the single AY, re-points the course's
+     classes in place, and carries balances **per fee title** when the title
+     sum equals the authoritative net with every title positive (juniors keep
+     live dues under real titles) — else one opening-balance row. The carried
+     total always equals the net.
+  2. `promote_program` then moves levels up (same-AY move ⇒ no double-carry),
+     section-preserving, terminal level frozen; batch counters advance.
+- **Final results** — exams with `inclusion_weight` aggregate: weights scale
+  marks AND full/pass marks identically, a missed exam contributes zero (no
+  re-normalisation), absent means absent in every included exam, dense-rank
+  on the final total. Same payload contract as a single exam.
+- **Optional subjects** — `OptionalSubjectAssignment` presence narrows marks
+  rosters; empty set = whole class (compulsory behaviour).
+- **Outbound SMS** — every send goes through the provider abstraction
+  (`settings.SMS_PROVIDER`, console default) and leaves a DeliveryLog row;
+  nothing is ever marked sent without a provider hand-off.
+- **Photo pool** — `people.PendingPhoto` is staging, never an archive:
+  pairing writes `Student.photo` and hard-deletes the pool row + file.
+- **Vendor surface** — splash announcements are any-principal by design;
+  `HiddenEducationLevel` presence hides a level from that school's pickers.
+
 ---
 
 _End of specification. Keep in sync with the system; when the next-level build diverges,

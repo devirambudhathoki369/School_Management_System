@@ -38,6 +38,7 @@ from apps.billing.models import (
     FeeTitle,
     LineType,
     Payment,
+    PaymentLine,
 )
 from apps.core.dates import today_bs
 from apps.people.models import Student
@@ -287,3 +288,165 @@ def carry_forward_on_promotion(students, source_class, target_class, actor=None)
     Charge.objects.bulk_create(charges)
     ChargeLine.objects.bulk_create(lines)
     return carried
+
+
+def _per_title_balances(school, academic_year, student_ids) -> dict:
+    """{student_id: {fee_title_id: net}} over FEE lines only — the per-title
+    view the trial balance shows. Used by the program rollover to carry
+    continuing students' dues under their REAL titles."""
+    per: dict = {}
+    charge_rows = (
+        ChargeLine.objects.filter(
+            charge__school=school,
+            charge__academic_year=academic_year,
+            charge__student_id__in=student_ids,
+            line_type=LineType.FEE,
+            fee_title__isnull=False,
+        )
+        .values("charge__student_id", "fee_title_id")
+        .annotate(total=Sum("amount"))
+    )
+    for row in charge_rows:
+        per.setdefault(row["charge__student_id"], {})[row["fee_title_id"]] = (
+            row["total"] or ZERO
+        )
+    payment_rows = (
+        PaymentLine.objects.filter(
+            payment__school=school,
+            payment__academic_year=academic_year,
+            payment__student_id__in=student_ids,
+            payment__kind=FeeTitle.Kind.REGULAR,
+            line_type=LineType.FEE,
+            fee_title__isnull=False,
+        )
+        .values("payment__student_id", "fee_title_id")
+        .annotate(paid=Sum("amount"), discount=Sum("discount"))
+    )
+    for row in payment_rows:
+        titles = per.setdefault(row["payment__student_id"], {})
+        credit = (row["paid"] or ZERO) + (row["discount"] or ZERO)
+        titles[row["fee_title_id"]] = titles.get(row["fee_title_id"], ZERO) - credit
+    return per
+
+
+def rollover_program_year(school, course, new_year_data, billing_year, actor,
+                          *, apply=False) -> dict:
+    """Shared-clock program roll (legacy rollover_academic_year): every level
+    of the course maps to ONE academic year; close it, open the next, and
+    carry each running student's balance forward — PER FEE TITLE where it
+    cleanly reconciles (juniors keep reading current dues under real titles),
+    else one opening-balance row.
+
+    Money safety, exactly the legacy rule: per-title is used only when the
+    title sum equals the authoritative net AND every title is non-negative;
+    either way the carried total equals the net, so nothing is created or
+    lost. Zero-net students are skipped. Does NOT promote — after the roll
+    every student sits in the same class under the new year, so the
+    promote-program step is a same-year move and cannot double-carry."""
+    from apps.academics.models import AcademicYear, ClassInfo, CurrentYearPointer
+    from apps.people.models import Student
+
+    classes = list(ClassInfo.objects.filter(school=school, course=course))
+    if not classes:
+        raise serializers.ValidationError("The course has no classes.")
+    years = {cls.academic_year_id for cls in classes}
+    if len(years) != 1 or None in years:
+        raise serializers.ValidationError(
+            "The course's classes are not on one academic year — this roll is "
+            "for shared-clock programs only."
+        )
+    old_year = classes[0].academic_year
+    if old_year.closed:
+        raise serializers.ValidationError(f"{old_year.name} is already closed.")
+
+    class_ids = [cls.id for cls in classes]
+    balances = _student_balances(school, old_year, class_ids=class_ids)
+    balances = {
+        sid: bal.quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
+        for sid, bal in balances.items()
+        if bal != ZERO
+    }
+    per_title = _per_title_balances(school, old_year, list(balances))
+    by_class = {
+        row["id"]: row["class_info_id"]
+        for row in Student.objects.filter(id__in=balances).values("id", "class_info_id")
+    }
+    title_names = dict(
+        FeeTitle.objects.filter(school=school).values_list("id", "name")
+    )
+
+    plan = []  # (student_id, class_id, net, [(fee_title_id|None, label, amount)])
+    for student_id, net in balances.items():
+        titles = {
+            title: amount.quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
+            for title, amount in per_title.get(student_id, {}).items()
+            if amount != ZERO
+        }
+        clean = (
+            bool(titles)
+            and net > ZERO
+            and sum(titles.values(), ZERO) == net
+            and all(amount > ZERO for amount in titles.values())
+        )
+        if clean:
+            lines = [
+                (title, title_names.get(title, "Fee"), amount)
+                for title, amount in titles.items()
+            ]
+        else:
+            lines = [(None, "Opening balance", net)]
+        plan.append((student_id, by_class[student_id], net, lines))
+
+    result = {
+        "old_year": old_year.name,
+        "students": len(plan),
+        "total": str(sum((net for _, _, net, _ in plan), ZERO)),
+        "per_title_students": sum(1 for *_, lines in plan if lines[0][0] is not None),
+        "applied": False,
+    }
+    if not apply:
+        return result
+
+    with transaction.atomic():
+        new_year = AcademicYear.objects.create(school=school, **new_year_data)
+        date_bs = today_bs()
+        batches: dict = {}
+        charges, charge_lines = [], []
+        for student_id, class_id, net, lines in plan:
+            batch = batches.get(class_id)
+            if batch is None:
+                batch = ChargeBatch.objects.create(
+                    school=school, date_bs=date_bs, months=[],
+                    academic_year=new_year, billing_year=billing_year,
+                    class_info_id=class_id, created_by=actor,
+                    remarks=f"Program roll {old_year.name}",
+                )
+                batches[class_id] = batch
+            charge = Charge(
+                school=school, batch=batch, student_id=student_id,
+                date_bs=date_bs, academic_year=new_year,
+                billing_year=billing_year, total=net,
+            )
+            charges.append(charge)
+            for fee_title_id, label, amount in lines:
+                charge_lines.append(ChargeLine(
+                    charge=charge,
+                    line_type=LineType.FEE if fee_title_id else LineType.OPENING_BALANCE,
+                    fee_title_id=fee_title_id,
+                    label=label[:60],
+                    amount=amount,
+                ))
+        Charge.objects.bulk_create(charges)
+        ChargeLine.objects.bulk_create(charge_lines)
+
+        old_year.closed = True
+        old_year.save(update_fields=["closed", "updated_at"])
+        CurrentYearPointer.objects.filter(
+            school=school, academic_year=old_year
+        ).update(previous_academic_year=old_year, academic_year=new_year)
+        for cls in classes:
+            cls.academic_year = new_year
+        ClassInfo.objects.bulk_update(classes, ["academic_year"])
+    result["applied"] = True
+    result["new_year"] = new_year.name
+    return result
