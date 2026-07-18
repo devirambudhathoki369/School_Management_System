@@ -291,6 +291,18 @@ class SubjectResultSheetViewSet(TenantScopedViewSet):
             class_info=sheet.class_info,
             status=Student.Status.RUNNING,
         ).order_by("first_name", "last_name")
+        # Optional subjects narrow to the assigned set (legacy
+        # SubjectAssignment); no assignments = whole class, as before.
+        from apps.academics.models import OptionalSubjectAssignment, Subject
+
+        if sheet.subject.type == Subject.Type.OPTIONAL:
+            assigned = list(
+                OptionalSubjectAssignment.objects.filter(
+                    subject=sheet.subject
+                ).values_list("student_id", flat=True)
+            )
+            if assigned:
+                students = students.filter(id__in=assigned)
         return Response([
             {"id": str(s.id), "full_name": s.full_name, "roll_no": s.roll_no}
             for s in students
@@ -322,7 +334,7 @@ class ActivityGradeViewSet(TenantScopedViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
-        for param in ("exam", "student"):
+        for param in ("exam", "student", "class_info"):
             value = self.request.query_params.get(param)
             if value:
                 qs = qs.filter(**{param: value})

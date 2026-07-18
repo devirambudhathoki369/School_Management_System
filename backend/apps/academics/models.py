@@ -201,6 +201,32 @@ class ClassInfo(TenantScopedModel):
         return " · ".join(parts)
 
 
+class OptionalSubjectAssignment(TenantScopedModel):
+    """Which students of a class take an OPTIONAL subject (legacy
+    SubjectAssignment, its per-subject students JSON exploded to rows).
+
+    Marks-entry rosters and result sheets narrow to the assigned set when a
+    subject is optional and at least one assignment exists; no rows = the
+    whole class (compulsory behaviour), so existing data is untouched."""
+
+    subject = models.ForeignKey(
+        "academics.Subject", on_delete=models.CASCADE, related_name="assignments"
+    )
+    student = models.ForeignKey(
+        "people.Student", on_delete=models.CASCADE, related_name="optional_subjects"
+    )
+
+    class Meta(TenantScopedModel.Meta):
+        constraints = [
+            models.UniqueConstraint(
+                fields=["subject", "student"], name="uniq_optional_subject_student"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.student_id} takes {self.subject_id}"
+
+
 class Subject(TenantScopedModel):
     """
     A subject taught to a class. "Partitioned" subjects (S3) keep the theory

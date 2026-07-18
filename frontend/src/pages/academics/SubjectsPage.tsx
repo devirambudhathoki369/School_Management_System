@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
 import { useSubjectsOfClass, type SubjectFull } from '../../lib/academics'
+import { useExamClassRoster } from '../../lib/exams'
 import ClassPicker from '../../components/ClassPicker'
 import {
   Badge,
@@ -28,6 +29,7 @@ export default function SubjectsPage() {
   const [classId, setClassId] = useState('')
   const subjects = useSubjectsOfClass(classId || null)
   const [editing, setEditing] = useState<SubjectFull | 'new' | null>(null)
+  const [assigning, setAssigning] = useState<SubjectFull | null>(null)
 
   const rows = [...(subjects.data ?? [])].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
 
@@ -80,6 +82,14 @@ export default function SubjectsPage() {
                       }`}
                   </p>
                 </div>
+                {s.type === 'optional' && (
+                  <button
+                    onClick={() => setAssigning(s)}
+                    className="rounded-md bg-accent-soft px-2 py-1 text-xs font-medium text-accent hover:opacity-80"
+                  >
+                    Assign students
+                  </button>
+                )}
                 {s.type === 'optional' && <Badge>optional</Badge>}
                 {s.name_practical && <Badge tone="accent">partitioned</Badge>}
                 {s.is_protected && <Badge tone="warning">protected</Badge>}
@@ -113,7 +123,118 @@ export default function SubjectsPage() {
           onClose={() => setEditing(null)}
         />
       )}
+      {assigning && (
+        <AssignStudentsModal
+          subject={assigning}
+          classId={classId}
+          onClose={() => setAssigning(null)}
+        />
+      )}
     </div>
+  )
+}
+
+/** Optional-subject targeting: tick who takes it. Empty selection = the
+ *  whole class (compulsory behaviour); marks rosters narrow to this set. */
+function AssignStudentsModal({
+  subject,
+  classId,
+  onClose,
+}: {
+  subject: SubjectFull
+  classId: string
+  onClose: () => void
+}) {
+  const toast = useToast()
+  const roster = useExamClassRoster(classId)
+  const current = useQuery({
+    queryKey: ['academics', 'subject-assignments', subject.id],
+    queryFn: async () =>
+      (
+        await api.get<{ students: string[] }>(
+          `/api/v1/academics/subjects/${subject.id}/assignments/`,
+        )
+      ).data.students,
+  })
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (current.data) setPicked(new Set(current.data))
+  }, [current.data])
+
+  const save = useMutation({
+    mutationFn: () =>
+      api.put(`/api/v1/academics/subjects/${subject.id}/assignments/`, {
+        students: [...picked],
+      }),
+    onSuccess: () => {
+      toast.success(`${subject.name}: ${picked.size} students assigned.`)
+      onClose()
+    },
+    onError: (error) => toast.error(apiErrorMessage(error)),
+  })
+
+  const rows = roster.data ?? []
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Who takes ${subject.name}?`}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button busy={save.isPending} onClick={() => save.mutate()}>
+            Save assignment
+          </Button>
+        </>
+      }
+    >
+      <p className="mb-3 text-xs text-ink-muted">
+        Marks entry for this optional subject lists only the ticked students.
+        Ticking nobody keeps the whole class eligible.
+      </p>
+      <div className="mb-2 flex gap-2">
+        <Button variant="ghost" size="sm" onClick={() => setPicked(new Set(rows.map((r) => r.id)))}>
+          Select all
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())}>
+          Clear
+        </Button>
+        <span className="ml-auto self-center text-xs text-ink-muted">
+          {picked.size}/{rows.length}
+        </span>
+      </div>
+      <div className="max-h-72 space-y-0.5 overflow-y-auto rounded-lg border border-border p-1.5">
+        {roster.isLoading ? (
+          <SkeletonRows rows={5} />
+        ) : (
+          rows.map((r) => (
+            <label
+              key={r.id}
+              className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-surface-muted"
+            >
+              <input
+                type="checkbox"
+                checked={picked.has(r.id)}
+                onChange={(e) => {
+                  setPicked((prev) => {
+                    const next = new Set(prev)
+                    if (e.target.checked) next.add(r.id)
+                    else next.delete(r.id)
+                    return next
+                  })
+                }}
+                className="size-4 accent-accent"
+              />
+              <span className="flex-1">{r.full_name}</span>
+              <span className="text-xs text-ink-faint">Roll {r.roll_no || '—'}</span>
+            </label>
+          ))
+        )}
+      </div>
+    </Modal>
   )
 }
 

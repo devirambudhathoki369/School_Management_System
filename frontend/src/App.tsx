@@ -47,6 +47,7 @@ import PunchLogPage from './pages/devices/PunchLogPage'
 import AuditLogPage from './pages/audit/AuditLogPage'
 import ResultsPage from './pages/exams/ResultsPage'
 import FinalResultsPage from './pages/exams/FinalResultsPage'
+import ActivitiesPage from './pages/exams/ActivitiesPage'
 import NewsPage from './pages/communication/NewsPage'
 import StatementPage from './pages/accounting/StatementPage'
 import LedgersPage from './pages/accounting/LedgersPage'
@@ -259,6 +260,7 @@ export default function App() {
             <Route path="sheets/:sheetId/marks" element={<MarksPage />} />
             <Route path="results" element={<ResultsPage />} />
             <Route path="final" element={<FinalResultsPage />} />
+            <Route path="activities" element={<ActivitiesPage />} />
             <Route path="entry-cards" element={<EntryCardsPage />} />
             <Route path="seat-plan" element={<SeatPlanPage />} />
             <Route path="certificates" element={<CertificatesPage />} />

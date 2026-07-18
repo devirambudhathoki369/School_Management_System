@@ -104,6 +104,7 @@ const NAV: Section[] = [
           { label: 'Exam schedule', to: '/exams/schedule' },
           { label: 'Results & print', to: '/exams/results' },
           { label: 'Final results', to: '/exams/final' },
+          { label: 'Activities', to: '/exams/activities' },
           { label: 'Entry cards', to: '/exams/entry-cards' },
           { label: 'Seat plan', to: '/exams/seat-plan' },
           { label: 'Character certificates', to: '/exams/certificates' },

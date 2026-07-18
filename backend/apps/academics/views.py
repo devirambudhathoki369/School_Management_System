@@ -8,7 +8,16 @@ from apps.core.viewsets import TenantScopedViewSet
 from apps.identity.models import Role
 
 from . import services
-from .models import AcademicYear, Batch, ClassInfo, Course, CurrentYearPointer, Section, Subject
+from .models import (
+    AcademicYear,
+    Batch,
+    ClassInfo,
+    Course,
+    CurrentYearPointer,
+    OptionalSubjectAssignment,
+    Section,
+    Subject,
+)
 from .serializers import (
     AcademicYearSerializer,
     BatchSerializer,
@@ -188,3 +197,37 @@ class SubjectViewSet(TenantScopedViewSet):
         if instance.is_referenced():
             raise ValidationError("Subject is in use and cannot be deleted.")
         instance.soft_delete()
+
+    @extend_schema(summary="Which students take this optional subject")
+    @action(detail=True, methods=["get", "put"], url_path="assignments")
+    def assignments(self, request, pk=None):
+        """Replace-set semantics like the EEF targeting: PUT {students: [...]}
+        swaps the assigned set. No rows = the whole class takes it."""
+        from django.db import transaction
+
+        from apps.people.models import Student
+
+        subject = self.get_object()
+        if request.method == "GET":
+            return Response({
+                "students": sorted(
+                    str(s) for s in subject.assignments.values_list("student_id", flat=True)
+                )
+            })
+        ids = request.data.get("students")
+        if ids is None or not isinstance(ids, list):
+            raise ValidationError({"students": "Provide the list of student ids."})
+        students = list(
+            Student.objects.filter(school=request.school, id__in=set(ids))
+        )
+        if len(students) != len(set(ids)):
+            raise ValidationError({"students": "Unknown student in the list."})
+        with transaction.atomic():
+            subject.assignments.all().delete()
+            OptionalSubjectAssignment.objects.bulk_create(
+                OptionalSubjectAssignment(
+                    school=request.school, subject=subject, student=s
+                )
+                for s in students
+            )
+        return Response({"students": sorted(str(s.id) for s in students)})
