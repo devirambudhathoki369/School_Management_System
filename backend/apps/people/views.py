@@ -303,6 +303,84 @@ class StudentViewSet(TenantScopedViewSet):
         return _swap_photo(request, self.get_object())
 
 
+class PendingPhotoViewSet(TenantScopedViewSet):
+    """Photo pool: bulk-upload now, pair to students later (legacy
+    PendingStudentPhoto). Pool rows hard-delete on pair/discard — staging,
+    not storage."""
+
+    from .models import PendingPhoto as _PendingPhoto
+
+    queryset = _PendingPhoto.objects.all()
+    allowed_roles = MANAGERS
+    permission_code = "students"
+    http_method_names = ["get", "post", "delete", "head", "options"]
+
+    def get_serializer_class(self):
+        from rest_framework import serializers as drf
+
+        from .models import PendingPhoto
+
+        class PendingPhotoSerializer(drf.ModelSerializer):
+            class Meta:
+                model = PendingPhoto
+                fields = ["id", "image", "note", "created_at"]
+                read_only_fields = ["id", "image", "created_at"]
+
+        return PendingPhotoSerializer
+
+    def create(self, request, *args, **kwargs):
+        """Multi-file upload: every file under `photos` goes through the
+        validated intake; one bad file rejects only itself."""
+        from apps.core import uploads
+
+        from .models import PendingPhoto
+
+        files = request.FILES.getlist("photos")
+        if not files:
+            raise ValidationError({"photos": "Attach at least one image."})
+        if len(files) > 100:
+            raise ValidationError({"photos": "At most 100 photos per upload."})
+        created, rejected = [], []
+        for upload in files:
+            try:
+                ext = uploads.validate(upload, "photo")
+            except Exception:
+                rejected.append(upload.name)
+                continue
+            original = upload.name
+            upload.name = f"photo.{ext}"
+            row = PendingPhoto.objects.create(
+                school=request.school, image=upload, note=original[:60]
+            )
+            created.append(str(row.id))
+        return Response(
+            {"uploaded": len(created), "rejected": rejected}, status=201
+        )
+
+    def perform_destroy(self, instance):
+        instance.image.delete(save=False)
+        instance.delete()  # staging rows hard-delete
+
+    @extend_schema(summary="Pair this pool photo to a student")
+    @action(detail=True, methods=["post"], url_path="pair")
+    def pair(self, request, pk=None):
+        pending = self.get_object()
+        student = Student.objects.filter(
+            school=request.school, id=request.data.get("student")
+        ).first()
+        if student is None:
+            raise ValidationError({"student": "Unknown student."})
+        if student.photo:
+            student.photo.delete(save=False)
+        # move the already-validated file: same storage, new owner
+        student.photo.save(
+            f"photo.{pending.image.name.rsplit('.', 1)[-1]}", pending.image.file
+        )
+        pending.image.delete(save=False)
+        pending.delete()
+        return Response({"student": str(student.id), "photo": student.photo.url})
+
+
 class GuardianViewSet(TenantScopedViewSet):
     queryset = Guardian.objects.select_related("account")
     serializer_class = GuardianSerializer

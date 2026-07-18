@@ -7,6 +7,7 @@ import StudentsPage from './pages/people/StudentsPage'
 import StudentProfilePage from './pages/people/StudentProfilePage'
 import StaffPage from './pages/people/StaffPage'
 import BulkPage from './pages/people/BulkPage'
+import PhotoPoolPage from './pages/people/PhotoPoolPage'
 import AcademicsLayout from './pages/academics/AcademicsLayout'
 import ClassesPage from './pages/academics/ClassesPage'
 import SubjectsPage from './pages/academics/SubjectsPage'
@@ -175,6 +176,7 @@ export default function App() {
             <Route path="students/:studentId" element={<StudentProfilePage />} />
             <Route path="staff" element={<StaffPage />} />
             <Route path="bulk" element={<BulkPage />} />
+            <Route path="photos" element={<PhotoPoolPage />} />
           </Route>
           <Route path="/academics" element={<AcademicsLayout />}>
             <Route index element={<Navigate to="classes" replace />} />

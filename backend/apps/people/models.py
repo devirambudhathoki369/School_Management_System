@@ -47,6 +47,25 @@ def staff_photo_path(instance, filename):  # noqa: ARG001
     return stored_name(instance.school_id, "staff-photos", filename.rsplit(".", 1)[-1])
 
 
+def pending_photo_path(instance, filename):  # noqa: ARG001
+    from apps.core.uploads import stored_name
+
+    return stored_name(instance.school_id, "pending-photos", filename.rsplit(".", 1)[-1])
+
+
+class PendingPhoto(TenantScopedModel):
+    """Photo pool (legacy PendingStudentPhoto): photographers dump a batch of
+    shots, office staff pair them to students later. Pairing writes
+    Student.photo and hard-deletes the pool row + file — the pool is a
+    staging area, never an archive."""
+
+    image = models.ImageField(upload_to=pending_photo_path)
+    note = models.CharField(max_length=60, blank=True, default="")
+
+    def __str__(self):
+        return f"Pending photo {self.id}"
+
+
 class Student(TenantScopedModel):
     class Status(models.TextChoices):
         RUNNING = "running", "Running"

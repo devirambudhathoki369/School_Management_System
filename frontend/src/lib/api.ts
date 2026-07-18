@@ -23,10 +23,12 @@ api.interceptors.request.use((config) => {
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`
   }
-  // FormData must negotiate its own multipart boundary — the JSON default
-  // would make Django reject the upload as unsupported_media_type.
+  // FormData must negotiate its own multipart boundary, so the browser has
+  // to author the Content-Type itself. Assigning undefined does NOT clear an
+  // AxiosHeaders key, and setting multipart/form-data manually ships it
+  // WITHOUT a boundary — delete() is the only variant that works.
   if (config.data instanceof FormData) {
-    config.headers['Content-Type'] = undefined
+    config.headers.delete('Content-Type')
   }
   return config
 })

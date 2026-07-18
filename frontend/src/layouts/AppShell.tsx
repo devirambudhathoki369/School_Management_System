@@ -69,6 +69,7 @@ const NAV: Section[] = [
           { label: 'Students', to: '/people/students' },
           { label: 'Staff', to: '/people/staff' },
           { label: 'Bulk tools', to: '/people/bulk' },
+          { label: 'Photo pool', to: '/people/photos' },
         ],
       },
     ],
