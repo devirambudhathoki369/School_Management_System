@@ -38,6 +38,7 @@ ANY_PRINCIPAL = {
     "/api/v1/auth/change-password/",
     "/api/v1/auth/permission-catalog/",
     "/api/v1/meta/calendar/",
+    "/api/v1/meta/splash/",  # vendor announcement: every signed-in user sees it
     "/api/v1/people/staff-roles/",  # global vocabulary, no tenant data
 }
 
