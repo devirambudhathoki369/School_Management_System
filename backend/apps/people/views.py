@@ -109,6 +109,59 @@ class StudentViewSet(TenantScopedViewSet):
             qs = qs.filter(class_info=class_info)
         return qs.order_by("first_name", "last_name")
 
+    @extend_schema(summary="Enroll many students into one class at once")
+    @action(detail=False, methods=["post"], url_path="bulk-enroll")
+    def bulk_enroll(self, request):
+        """Legacy bulk enrolment: one class, many rows in a single shot.
+        All-or-nothing — one bad row rejects the batch with its row number."""
+        from django.db import transaction
+
+        from apps.academics.models import ClassInfo
+
+        class_info = ClassInfo.objects.filter(
+            id=request.data.get("class_info"), school=request.school
+        ).first()
+        if class_info is None:
+            raise ValidationError({"class_info": "Unknown class."})
+        if class_info.academic_year_id is None:
+            raise ValidationError({"class_info": "Class has no academic year."})
+        rows = request.data.get("rows")
+        if not isinstance(rows, list) or not rows:
+            raise ValidationError({"rows": "Provide at least one student row."})
+        if len(rows) > 200:
+            raise ValidationError({"rows": "At most 200 rows per batch."})
+
+        allowed = {
+            "first_name", "middle_name", "last_name", "gender", "roll_no",
+            "contact", "address", "email", "birth_date_bs", "ethnicity",
+            "previous_school", "remarks",
+        }
+        cleaned = []
+        for i, row in enumerate(rows):
+            if not isinstance(row, dict):
+                raise ValidationError({"rows": f"Row {i + 1}: not an object."})
+            data = {k: (row.get(k) or "").strip() for k in allowed}
+            if not data["first_name"] or not data["last_name"]:
+                raise ValidationError(
+                    {"rows": f"Row {i + 1}: first and last name are required."}
+                )
+            if data["gender"] not in ("male", "female", "other"):
+                raise ValidationError({"rows": f"Row {i + 1}: bad gender."})
+            cleaned.append(data)
+
+        with transaction.atomic():
+            created = [
+                Student.objects.create(
+                    school=request.school, class_info=class_info,
+                    academic_year=class_info.academic_year, **data,
+                )
+                for data in cleaned
+            ]
+        return Response(
+            {"enrolled": len(created), "students": [str(s.id) for s in created]},
+            status=201,
+        )
+
     @extend_schema(summary="Promote students to another class", request=PromoteSerializer)
     @action(detail=False, methods=["post"], url_path="promote")
     def promote(self, request):

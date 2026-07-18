@@ -11,6 +11,7 @@ export default function PeopleLayout() {
   const { account } = useAuth()
   const tabs = [
     { to: '/people/students', label: 'Students' },
+    { to: '/people/bulk', label: 'Bulk tools' },
     ...(account?.role === 'admin' ? [{ to: '/people/staff', label: 'Staff' }] : []),
   ]
 

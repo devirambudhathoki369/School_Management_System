@@ -66,6 +66,7 @@ const NAV: Section[] = [
         children: [
           { label: 'Students', to: '/people/students' },
           { label: 'Staff', to: '/people/staff' },
+          { label: 'Bulk tools', to: '/people/bulk' },
         ],
       },
     ],
